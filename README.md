@@ -204,3 +204,6 @@ Delete the copy in (2) to have it made again.
 ```sh
 go test ./...
 ```
+
+CI also checks `gofmt`, `go vet` and `go test -race`, with the Go version
+from the Containerfile.

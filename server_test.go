@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // testLibrary builds a library in a temp dir:
@@ -283,5 +284,66 @@ func TestTrackerEndpointsQuiet(t *testing.T) {
 	fetch(t, "GET", srv.URL+"/api/v1/something-new", "")
 	if !strings.Contains(logs.String(), "unhandled request GET /api/v1/something-new") {
 		t.Errorf("unknown request not logged: %q", logs.String())
+	}
+}
+
+func TestSortSeries(t *testing.T) {
+	day := func(d int) time.Time { return time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC) }
+	mk := func() []*Series {
+		return []*Series{
+			{Name: "a", Meta: seriesMeta{Title: "Chapter 10"}, Created: day(3), Modified: day(1)},
+			{Name: "b", Meta: seriesMeta{Title: "chapter 2"}, Created: day(1), Modified: day(3)},
+			{Name: "c", Meta: seriesMeta{Title: "Banana"}, Created: day(2), Modified: day(2)},
+		}
+	}
+	order := func(l []*Series) (s string) {
+		for _, x := range l {
+			s += x.Name
+		}
+		return
+	}
+	for sortParam, want := range map[string]string{
+		"metadata.titleSort,asc":  "cba", // natural, ignoring case
+		"metadata.titleSort,desc": "abc",
+		"relevance,asc":           "cba",
+		"":                        "cba",
+		"createdDate,asc":         "bca",
+		"createdDate,desc":        "acb",
+		"lastModifiedDate,desc":   "bca", // the extension's Latest
+	} {
+		l := mk()
+		sortSeries(l, sortParam)
+		if got := order(l); got != want {
+			t.Errorf("sort %q: %s, want %s", sortParam, got, want)
+		}
+	}
+	// Random: a permutation, the same on every call (for paging).
+	a, b := mk(), mk()
+	sortSeries(a, "random,asc")
+	sortSeries(b, "random,asc")
+	if order(a) != order(b) || len(order(a)) != 3 || !strings.ContainsRune(order(a), 'a') ||
+		!strings.ContainsRune(order(a), 'b') || !strings.ContainsRune(order(a), 'c') {
+		t.Errorf("random: %s then %s, want the same permutation", order(a), order(b))
+	}
+}
+
+func TestFilterMenus(t *testing.T) {
+	cat, srv := testLibrary(t)
+	for _, s := range cat.current().series {
+		switch s.Name {
+		case "Zip Series":
+			s.Meta.Genres, s.Meta.Tags, s.Meta.Publisher = []string{"Drama", "Action 10"}, []string{"Reading"}, "Pub B"
+		case "Other":
+			s.Meta.Genres, s.Meta.Tags, s.Meta.Publisher = []string{"Action 2", "Drama"}, []string{}, "Pub A"
+		}
+	}
+	for path, want := range map[string]string{
+		"/api/v1/genres":     `["Action 2","Action 10","Drama"]`, // distinct, natural order
+		"/api/v1/tags":       `["Reading"]`,
+		"/api/v1/publishers": `["Pub A","Pub B"]`, // series without a publisher add nothing
+	} {
+		if code, got := fetch(t, "GET", srv.URL+path, ""); code != 200 || strings.TrimSpace(got) != want {
+			t.Errorf("%s: %d %s, want %s", path, code, got, want)
+		}
 	}
 }

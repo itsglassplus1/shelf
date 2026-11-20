@@ -32,6 +32,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -56,14 +58,16 @@ type config struct {
 // maxCacheMB keeps the cache cap in bytes within an int64 (8 EiB).
 const maxCacheMB = math.MaxInt64 >> 20
 
-func envOr(key, def string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
+// loadConfig reads the configuration from the environment variables getenv
+// returns (os.Getenv; a map in tests).
+func loadConfig(getenv func(string) string) (config, error) {
+	envOr := func(key, def string) string {
+		if v := strings.TrimSpace(getenv(key)); v != "" {
+			return v
+		}
+		return def
 	}
-	return def
-}
 
-func loadConfig() config {
 	data := envOr("SHELF_DATA_DIR", "/data")
 	cfg := config{
 		root:        envOr("SHELF_ROOT", "/library"),
@@ -75,30 +79,33 @@ func loadConfig() config {
 	}
 	mb, err := strconv.ParseInt(envOr("SHELF_CACHE_MAX_MB", "1024"), 10, 64)
 	if err != nil || mb <= 0 || mb > maxCacheMB {
-		log.Fatalf("ERROR: SHELF_CACHE_MAX_MB must be a number of MB from 1 to %d, got %q", maxCacheMB, os.Getenv("SHELF_CACHE_MAX_MB"))
+		return config{}, fmt.Errorf("SHELF_CACHE_MAX_MB must be a number of MB from 1 to %d, got %q", maxCacheMB, getenv("SHELF_CACHE_MAX_MB"))
 	}
 	cfg.cacheMax = mb << 20
-	for _, c := range strings.Split(os.Getenv("SHELF_CATEGORIES"), ":") {
+	for _, c := range strings.Split(getenv("SHELF_CATEGORIES"), ":") {
 		if c = strings.Trim(strings.TrimSpace(c), "/"); c != "" {
 			cfg.categories = append(cfg.categories, c)
 		}
 	}
 	if len(cfg.categories) == 0 {
-		log.Fatal("ERROR: SHELF_CATEGORIES is empty; set it to e.g. \"comics/marvel:manga\"")
+		return config{}, errors.New("SHELF_CATEGORIES is empty; set it to e.g. \"comics/marvel:manga\"")
 	}
 	switch v := strings.ToLower(envOr("SHELF_AUTH", "on")); v {
 	case "on":
 	case "off":
 		cfg.credentials = ""
 	default:
-		log.Fatalf("ERROR: SHELF_AUTH must be \"on\" or \"off\", got %q", v)
+		return config{}, fmt.Errorf("SHELF_AUTH must be \"on\" or \"off\", got %q", v)
 	}
-	return cfg
+	return cfg, nil
 }
 
 func main() {
 	log.SetFlags(0) // journald adds timestamps
-	cfg := loadConfig()
+	cfg, err := loadConfig(os.Getenv)
+	if err != nil {
+		log.Fatalf("ERROR: %v", err)
+	}
 	checkDataDir(cfg.dataDir)
 
 	var auth *authenticator

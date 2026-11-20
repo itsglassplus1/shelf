@@ -1,0 +1,40 @@
+# Checks the code with what the container build can't run: the race
+# detector needs cgo, which the static build turns off. Also checks gofmt.
+# Uses the Go version of the Containerfile, which Dependabot keeps current.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Go version from Containerfile
+        id: go
+        run: |
+          version=$(sed -n 's|.*/golang:\([0-9.]*\)-alpine.*|\1|p' Containerfile)
+          test -n "$version" || { echo "no golang:<version>-alpine in Containerfile"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ steps.go.outputs.version }}
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          test -z "$unformatted" || { echo "not gofmt-formatted:"; echo "$unformatted"; exit 1; }
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test -race
+        run: go test -race -count=1 ./...
