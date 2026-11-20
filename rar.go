@@ -134,17 +134,19 @@ func archiveFormat(file string) (string, error) {
 	return "", fmt.Errorf("%s: not a zip, rar or tar archive", file)
 }
 
-// rarPage reports whether an archive entry is a page, and its normalized
-// name and media type. Shared by extraction and rarFirstPage so both agree
-// on which entry is page 1.
-func rarPage(h *rardecode.FileHeader) (name, mediaType string, ok bool) {
+// rarCandidate reports whether an archive entry may be a page, and its
+// normalized name: a file that isn't hidden, isn't macOS junk, and may be an
+// image by its name (see imageMediaType; whether it is may need its
+// content). Shared by extraction and rarFirstPage so both agree on which
+// entry is page 1.
+func rarCandidate(h *rardecode.FileHeader) (name string, ok bool) {
 	name = strings.ReplaceAll(h.Name, "\\", "/")
 	base := path.Base(name)
-	mediaType = imageTypes[strings.ToLower(path.Ext(base))]
-	if h.IsDir || mediaType == "" || strings.HasPrefix(name, "__MACOSX/") || strings.HasPrefix(base, ".") {
-		return "", "", false
+	if h.IsDir || strings.HasPrefix(name, "__MACOSX/") || strings.HasPrefix(base, ".") ||
+		notImageExts[strings.ToLower(path.Ext(base))] {
+		return "", false
 	}
-	return name, mediaType, true
+	return name, true
 }
 
 // pages returns the page list of a RAR chapter, unpacking it on first use.
@@ -216,17 +218,23 @@ func (rc *rarCache) extract(archive, dest string) (err error) {
 		if err != nil {
 			return fmt.Errorf("%s: %w", archive, err)
 		}
-		name, mt, ok := rarPage(h)
+		name, ok := rarCandidate(h)
 		if !ok {
 			continue // skipped entries are decoded past by Next()
 		}
-		file := fmt.Sprintf("%05d%s", len(entries), strings.ToLower(path.Ext(name)))
+		var head []byte // read from r if the name doesn't tell
+		mt := imageMediaType(name, func() []byte { head = readHead(r); return head })
+		if mt == "" {
+			continue
+		}
+		file := fmt.Sprintf("%05d%s", len(entries), imageFileExt(name, mt))
 		out, err := os.Create(filepath.Join(tmp, file))
 		if err != nil {
 			return err
 		}
 		// Guard against archives that unpack to more than the whole cache.
-		n, err := io.Copy(out, io.LimitReader(r, rc.max-total+1))
+		src := io.MultiReader(bytes.NewReader(head), r)
+		n, err := io.Copy(out, io.LimitReader(src, rc.max-total+1))
 		out.Close()
 		if err != nil {
 			return fmt.Errorf("%s: %s: %w", archive, name, err)
@@ -259,21 +267,42 @@ func rarFirstPage(archive string) (name, mediaType string, data []byte, err erro
 	if err != nil {
 		return "", "", nil, fmt.Errorf("%s: %w", archive, err)
 	}
-	var first *rardecode.File
+	type candidate struct {
+		f    *rardecode.File
+		name string
+	}
+	var candidates []candidate
 	for _, f := range files {
-		if n, mt, ok := rarPage(&f.FileHeader); ok && (first == nil || naturalCompare(n, name) < 0) {
-			first, name, mediaType = f, n, mt
+		if n, ok := rarCandidate(&f.FileHeader); ok {
+			candidates = append(candidates, candidate{f, n})
 		}
 	}
-	if first == nil {
-		return "", "", nil, errNoPage
+	slices.SortStableFunc(candidates, func(a, b candidate) int { return naturalCompare(a.name, b.name) })
+	// Page 1 is the first image in natural order. Files the name doesn't
+	// tell about are read to see (rare: most pages have image extensions).
+	for _, c := range candidates {
+		if mt := imageTypes[strings.ToLower(path.Ext(c.name))]; mt != "" {
+			data, err = readRarFile(archive, c.f, maxCoverBytes)
+			if err != nil {
+				return "", "", nil, err
+			}
+			return c.name, mt, data, nil
+		}
+		data, err = readRarFile(archive, c.f, maxCoverBytes)
+		if errors.Is(err, errTooLarge) {
+			continue // too large for a cover, image or not
+		}
+		if err != nil {
+			return "", "", nil, err
+		}
+		if mt := sniffImage(data); mt != "" {
+			return c.name, mt, data, nil
+		}
 	}
-	data, err = readRarFile(archive, first, maxCoverBytes)
-	if err != nil {
-		return "", "", nil, err
-	}
-	return name, mediaType, data, nil
+	return "", "", nil, errNoPage
 }
+
+var errTooLarge = errors.New("too large")
 
 // readRarFile reads one file listed by rardecode.List, refusing more than
 // limit bytes. In a normal archive the file is opened directly. In a solid
@@ -308,7 +337,7 @@ func readRarFile(archive string, f *rardecode.File, limit int64) ([]byte, error)
 	}
 	data, err := io.ReadAll(io.LimitReader(src, limit+1))
 	if err == nil && int64(len(data)) > limit {
-		err = fmt.Errorf("larger than %d MB", limit>>20)
+		err = fmt.Errorf("%w: larger than %d MB", errTooLarge, limit>>20)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %s: %w", archive, f.Name, err)

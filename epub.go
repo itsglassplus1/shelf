@@ -193,13 +193,16 @@ func epubPages(zr *zip.Reader) ([]pageEntry, error) {
 		if err != nil {
 			continue
 		}
+		var mt string
 		for _, src := range imageRefs(data) {
 			name, ok := e.find(pagePath, src)
-			mt := imageTypes[strings.ToLower(path.Ext(name))]
-			if !ok || mt == "" {
-				continue // not in the archive (e.g. a URL), or not an image the extension takes
+			if !ok {
+				continue // not in the archive (e.g. a URL)
 			}
 			i := e.files[name]
+			if mt = imageMediaType(name, func() []byte { return zipHead(zr.File[i]) }); mt == "" {
+				continue // not an image the extension takes
+			}
 			pages = append(pages, pageEntry{name: zr.File[i].Name, mediaType: mt, zipIndex: i})
 		}
 	}

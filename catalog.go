@@ -362,7 +362,7 @@ func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*S
 			s.Books = append(s.Books, &Book{Title: fname, Path: p, IsDir: true, Size: dirSize(p), Modified: fi.ModTime()})
 		case chapterExts[ext]:
 			s.Books = append(s.Books, &Book{Title: strings.TrimSuffix(fname, path.Ext(fname)), Path: p, Size: fi.Size(), Modified: fi.ModTime()})
-		case imageTypes[ext] != "" && strings.EqualFold(strings.TrimSuffix(fname, path.Ext(fname)), "cover"):
+		case s.Cover == "" && coverMediaType(p, fname) != "": // the first, in name order
 			s.Cover = p
 		case strings.EqualFold(fname, comicInfoName):
 			s.MetaSrc = p // series-level ComicInfo.xml
@@ -472,12 +472,13 @@ func fileExists(p string) bool {
 	return err == nil && !fi.IsDir()
 }
 
-// dirSize sums the sizes of the image files in a chapter folder.
+// dirSize sums the sizes of the images in a chapter folder.
 func dirSize(dir string) int64 {
 	var total int64
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		if imageTypes[strings.ToLower(path.Ext(e.Name()))] == "" {
+		p := filepath.Join(dir, e.Name())
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") || imageMediaType(e.Name(), func() []byte { return fileHead(p) }) == "" {
 			continue
 		}
 		if fi, err := e.Info(); err == nil {

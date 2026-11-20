@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 )
@@ -86,14 +85,13 @@ func writeAtomic(dir, name string, r io.Reader) error {
 	return err
 }
 
-// findCover returns the cover.<image ext> file in dir, or "".
+// findCover returns the first cover file in dir (see coverMediaType), or "".
 func findCover(dir string) string {
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		n := e.Name()
-		ext := strings.ToLower(path.Ext(n))
-		if imageTypes[ext] != "" && strings.EqualFold(strings.TrimSuffix(n, path.Ext(n)), "cover") && !e.IsDir() {
-			return filepath.Join(dir, n)
+		p := filepath.Join(dir, e.Name())
+		if !e.IsDir() && coverMediaType(p, e.Name()) != "" {
+			return p
 		}
 	}
 	return ""
@@ -127,7 +125,7 @@ func (c *Catalog) seriesCover(s *Series) (string, error) {
 		return "", err
 	}
 	defer pg.Close()
-	name := "cover" + strings.ToLower(path.Ext(pg.name))
+	name := "cover" + imageFileExt(pg.name, pg.mediaType)
 	if err := writeAtomic(dir, name, pg); err != nil {
 		log.Printf("WARN: series %q: could not save cover: %v", s.Name, err)
 		return "", nil

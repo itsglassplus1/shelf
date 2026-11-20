@@ -128,9 +128,12 @@ func listDirPages(dir string) ([]pageEntry, error) {
 	}
 	var pages []pageEntry
 	for _, e := range entries {
-		n := e.Name()
-		if mt := imageTypes[strings.ToLower(path.Ext(n))]; mt != "" && !strings.HasPrefix(n, ".") && !e.IsDir() {
-			pages = append(pages, pageEntry{name: n, mediaType: mt, path: filepath.Join(dir, n)})
+		n, p := e.Name(), filepath.Join(dir, e.Name())
+		if strings.HasPrefix(n, ".") || isDirEntryDir(dir, e) {
+			continue
+		}
+		if mt := imageMediaType(n, func() []byte { return fileHead(p) }); mt != "" {
+			pages = append(pages, pageEntry{name: n, mediaType: mt, path: p})
 		}
 	}
 	slices.SortFunc(pages, func(a, b pageEntry) int { return naturalCompare(a.name, b.name) })
@@ -267,12 +270,22 @@ func (c *Catalog) listZipPages(b *Book) ([]pageEntry, error) {
 		if f.FileInfo().IsDir() || strings.HasPrefix(n, "__MACOSX/") || strings.HasPrefix(base, ".") {
 			continue
 		}
-		if mt := imageTypes[strings.ToLower(path.Ext(base))]; mt != "" {
+		if mt := imageMediaType(base, func() []byte { return zipHead(f) }); mt != "" {
 			pages = append(pages, pageEntry{name: n, mediaType: mt, zipIndex: i})
 		}
 	}
 	slices.SortFunc(pages, func(a, b pageEntry) int { return naturalCompare(a.name, b.name) })
 	return pages, nil
+}
+
+// zipHead returns the first sniffLen bytes of a zip entry, nil if unreadable.
+func zipHead(f *zip.File) []byte {
+	rc, err := f.Open()
+	if err != nil {
+		return nil
+	}
+	defer rc.Close()
+	return readHead(rc)
 }
 
 // openedPage is a readable page image. seeker is non-nil for plain files so

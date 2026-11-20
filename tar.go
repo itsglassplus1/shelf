@@ -97,13 +97,19 @@ func listTarPages(file string) ([]pageEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
 	var pages []pageEntry
 	for _, e := range entries {
 		base := path.Base(e.name)
 		if strings.HasPrefix(e.name, "__MACOSX/") || strings.HasPrefix(base, ".") {
 			continue
 		}
-		if mt := imageTypes[strings.ToLower(path.Ext(base))]; mt != "" {
+		head := func() []byte { return readHead(io.NewSectionReader(f, e.offset, e.size)) }
+		if mt := imageMediaType(base, head); mt != "" {
 			pages = append(pages, pageEntry{name: e.name, mediaType: mt, inTar: true, tarOffset: e.offset, tarSize: e.size})
 		}
 	}

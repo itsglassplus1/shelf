@@ -672,7 +672,7 @@ func (s *server) seriesThumbnail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cannot read cover", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", imageTypes[strings.ToLower(filepath.Ext(cover))])
+		w.Header().Set("Content-Type", coverMediaType(cover, filepath.Base(cover)))
 		w.Header().Set("Cache-Control", "private, max-age=3600")
 		http.ServeContent(w, r, filepath.Base(cover), fi.ModTime(), f)
 	default: // copies disabled or failed: serve the first page directly
