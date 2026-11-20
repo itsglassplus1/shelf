@@ -31,7 +31,7 @@ jobs:
       attestations: write # build provenance
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # ghcr.io image names must be lowercase; the repository name may not be.
       - name: Image name
