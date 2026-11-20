@@ -100,17 +100,6 @@ func (e *epubZip) read(name string) ([]byte, error) {
 	return data, err
 }
 
-func xmlDecoder(data []byte) *xml.Decoder {
-	dec := xml.NewDecoder(strings.NewReader(string(data)))
-	dec.CharsetReader = func(cs string, in io.Reader) (io.Reader, error) {
-		if strings.EqualFold(cs, "utf-8") || strings.EqualFold(cs, "utf8") || cs == "" {
-			return in, nil
-		}
-		return nil, fmt.Errorf("unsupported encoding %q", cs)
-	}
-	return dec
-}
-
 // packageDocument returns the path and contents of the package document.
 func (e *epubZip) packageDocument() (string, *epubPackage, error) {
 	ref := "OEBPS/content.opf"

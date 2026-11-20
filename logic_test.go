@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf16"
 )
 
 // ---- ordering ----------------------------------------------------------------
@@ -323,8 +325,35 @@ func TestParseComicInfo(t *testing.T) {
 		t.Errorf("release date %q", ci.ReleaseDate)
 	}
 
-	if _, err := parseComicInfo(strings.NewReader(`<?xml version="1.0" encoding="shift_jis"?><ComicInfo/>`)); err == nil {
-		t.Error("non-UTF-8 encoding: expected an error")
+	// Read as UTF-8 whatever the declaration says, like Mihon; real UTF-16
+	// (with a byte order mark) is converted.
+	utf16 := func(s string, big bool) string {
+		out := []byte{0xff, 0xfe}
+		if big {
+			out = []byte{0xfe, 0xff}
+		}
+		for _, u := range utf16.Encode([]rune(s)) {
+			if big {
+				out = append(out, byte(u>>8), byte(u))
+			} else {
+				out = append(out, byte(u), byte(u>>8))
+			}
+		}
+		return string(out)
+	}
+	doc := `<?xml version="1.0" encoding="utf-16"?><ComicInfo><Title>Ünïcode 話</Title></ComicInfo>`
+	for name, data := range map[string]string{
+		"utf-16 declared, UTF-8 file":     doc,
+		"shift_jis declared, ASCII file":  `<?xml version="1.0" encoding="shift_jis"?><ComicInfo><Title>Ünïcode 話</Title></ComicInfo>`,
+		"UTF-16 little-endian with a BOM": utf16(doc, false),
+		"UTF-16 big-endian with a BOM":    utf16(doc, true),
+	} {
+		if ci, err := parseComicInfo(strings.NewReader(data)); err != nil || ci.Title != "Ünïcode 話" {
+			t.Errorf("%s: %+v, %v", name, ci, err)
+		}
+	}
+	if _, err := parseComicInfo(strings.NewReader("<ComicInfo><Title>caf\xe9</Title></ComicInfo>")); err == nil {
+		t.Error("Latin-1 text (not UTF-8): expected an error")
 	}
 	if _, err := parseComicInfo(strings.NewReader(`<ComicInfo><Title>broken`)); err == nil {
 		t.Error("truncated XML: expected an error")
@@ -456,5 +485,43 @@ func TestConcurrentCoverRequests(t *testing.T) {
 	}
 	if !slices.Contains(names, "cover.png") || slices.ContainsFunc(names, func(n string) bool { return strings.HasPrefix(n, ".tmp-") }) {
 		t.Errorf("series folder: %q, want cover.png and no leftovers", names)
+	}
+}
+
+func TestChapterInfoCacheKeepsWholeLibrary(t *testing.T) {
+	cat, _ := testLibrary(t)
+	var zs *Series
+	for _, s := range cat.current().series {
+		if s.Name == "Zip Series" {
+			zs = s
+		}
+	}
+	// A library bigger than the old 5000-entry cap: nothing is thrown away.
+	cat.infos.mu.Lock()
+	for i := 0; i < 6000; i++ {
+		cat.infos.m[fmt.Sprintf("other-%d", i)] = &cachedInfo{}
+	}
+	cat.infos.mu.Unlock()
+	cat.chapters(zs)
+	cat.infos.mu.Lock()
+	n := len(cat.infos.m)
+	cat.infos.mu.Unlock()
+	if n != 6000+len(zs.Books) {
+		t.Fatalf("%d cache entries, want %d", n, 6000+len(zs.Books))
+	}
+
+	// A rescan forgets chapters no longer in the library.
+	gone := zs.Books[0]
+	os.Remove(gone.Path)
+	if err := cat.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	cat.infos.mu.Lock()
+	defer cat.infos.mu.Unlock()
+	if cat.infos.m[gone.ID] != nil || cat.infos.m["other-1"] != nil {
+		t.Errorf("removed chapter or unknown IDs still cached")
+	}
+	if cat.infos.m[zs.Books[1].ID] == nil {
+		t.Errorf("remaining chapter forgotten")
 	}
 }

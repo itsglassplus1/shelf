@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf16"
 )
 
 // ComicInfo.xml support.
@@ -68,16 +70,44 @@ type comicInfo struct {
 	ReleaseDate                               string // YYYY-MM-DD or ""
 }
 
-func parseComicInfo(r io.Reader) (*comicInfo, error) {
-	var x comicInfoXML
-	dec := xml.NewDecoder(io.LimitReader(r, 1<<20))
-	dec.CharsetReader = func(cs string, in io.Reader) (io.Reader, error) {
-		if strings.EqualFold(cs, "utf-8") || strings.EqualFold(cs, "utf8") || cs == "" {
-			return in, nil
-		}
-		return nil, fmt.Errorf("unsupported encoding %q", cs)
+// xmlDecoder reads an XML document (ComicInfo.xml, EPUB package files) as
+// UTF-8 whatever encoding it declares, like Mihon, which always reads
+// ComicInfo.xml as UTF-8: some tools declare "utf-16" in files that are
+// UTF-8, and plain-ASCII files often declare other encodings. A file that
+// really is UTF-16 (starting with a UTF-16 byte order mark) is converted
+// first. Text that isn't valid UTF-8 fails to parse.
+func xmlDecoder(data []byte) *xml.Decoder {
+	dec := xml.NewDecoder(bytes.NewReader(utf16ToUTF8(data)))
+	dec.CharsetReader = func(_ string, in io.Reader) (io.Reader, error) { return in, nil }
+	return dec
+}
+
+// utf16ToUTF8 converts data starting with a UTF-16 byte order mark to UTF-8
+// (without the mark); other data is returned as is.
+func utf16ToUTF8(data []byte) []byte {
+	var order binary.ByteOrder
+	switch {
+	case len(data) >= 2 && data[0] == 0xff && data[1] == 0xfe:
+		order = binary.LittleEndian
+	case len(data) >= 2 && data[0] == 0xfe && data[1] == 0xff:
+		order = binary.BigEndian
+	default:
+		return data
 	}
-	if err := dec.Decode(&x); err != nil {
+	units := make([]uint16, (len(data)-2)/2)
+	for i := range units {
+		units[i] = order.Uint16(data[2+2*i:])
+	}
+	return []byte(string(utf16.Decode(units)))
+}
+
+func parseComicInfo(r io.Reader) (*comicInfo, error) {
+	data, err := io.ReadAll(io.LimitReader(r, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	var x comicInfoXML
+	if err := xmlDecoder(data).Decode(&x); err != nil {
 		return nil, err
 	}
 
@@ -278,12 +308,23 @@ func (c *Catalog) chapterInfo(b *Book) *comicInfo {
 		}
 	}
 	c.infos.mu.Lock()
-	if len(c.infos.m) >= pageCacheMax {
-		c.infos.m = map[string]*cachedInfo{}
-	}
 	c.infos.m[b.ID] = &cachedInfo{modTime: mod, size: size, info: info}
 	c.infos.mu.Unlock()
 	return info
+}
+
+// pruneInfos forgets the metadata of chapters no longer in the library. The
+// cache has no size cap otherwise: it holds at most one small entry per
+// chapter, and a library update reads every chapter, so a cap smaller than
+// the library would make each update read every archive again.
+func (c *Catalog) pruneInfos(books map[string]*Book) {
+	c.infos.mu.Lock()
+	defer c.infos.mu.Unlock()
+	for id := range c.infos.m {
+		if books[id] == nil {
+			delete(c.infos.m, id)
+		}
+	}
 }
 
 // ---- chapter list -----------------------------------------------------------

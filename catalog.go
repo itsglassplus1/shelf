@@ -316,6 +316,7 @@ func (c *Catalog) refreshLocked() error {
 	c.mu.Lock()
 	c.idx = idx
 	c.mu.Unlock()
+	c.pruneInfos(idx.booksByID)
 	return nil
 }
 
