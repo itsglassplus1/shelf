@@ -43,6 +43,7 @@ import (
 
 type config struct {
 	root        string
+	dataDir     string
 	categories  []string
 	listen      string
 	cacheDir    string // <data>/cache
@@ -62,6 +63,7 @@ func loadConfig() config {
 	data := envOr("SHELF_DATA_DIR", "/data")
 	cfg := config{
 		root:        envOr("SHELF_ROOT", "/library"),
+		dataDir:     data,
 		listen:      envOr("SHELF_LISTEN", ":25600"),
 		cacheDir:    filepath.Join(data, "cache"),
 		seriesDir:   filepath.Join(data, "series"),
@@ -93,6 +95,7 @@ func loadConfig() config {
 func main() {
 	log.SetFlags(0) // journald adds timestamps
 	cfg := loadConfig()
+	checkDataDir(cfg.dataDir)
 
 	var auth *authenticator
 	if cfg.credentials != "" {
@@ -127,4 +130,24 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
+}
+
+// checkDataDir logs how to fix a data folder shelf can't write to. The
+// container image runs shelf as uid 1000, so a volume made for an older
+// image (which ran as root) needs its owner changed once. What then fails
+// (the login, RAR chapters, covers) is reported where it fails.
+func checkDataDir(dir string) {
+	err := os.MkdirAll(dir, 0o755)
+	if err == nil {
+		var f *os.File
+		if f, err = os.CreateTemp(dir, ".write-test-"); err == nil {
+			f.Close()
+			os.Remove(f.Name())
+			return
+		}
+	}
+	log.Printf("ERROR: data folder %s is not writable by uid %d: %v\n"+
+		"    give it to that user, e.g. for a volume:\n"+
+		"    podman run --rm -v <volume>:/data docker.io/library/alpine chown -R %d:%d /data",
+		dir, os.Getuid(), err, os.Getuid(), os.Getgid())
 }

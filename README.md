@@ -25,6 +25,23 @@ published only when the workflow is run by hand.
 
 To build locally: `podman build -t localhost/shelf .` (runs the tests first).
 
+On SELinux hosts (Fedora, RHEL), add `z` to bind mounts:
+`-v /path/to/library:/library:ro,z`.
+
+### User
+
+The image runs shelf as uid and gid 1000, usually the host's first user.
+`--user` sets another, e.g. `--user 1001:1001`.
+
+- The library must be readable by that user (world-readable files are).
+- A new named volume at `/data` gets that owner automatically.
+- A volume used with an image from before this change belongs to root.
+  Shelf logs an error naming the folder; change the owner once:
+  `podman run --rm -v shelf-data:/data docker.io/library/alpine chown -R 1000:1000 /data`
+- A bind-mounted data folder must be writable by that user. With rootless
+  Podman, add `--userns=keep-id`: the container's 1000 is then you on the
+  host, so shelf's files are yours and it can read what you can.
+
 ## Configuration
 
 | Variable | Default | |
