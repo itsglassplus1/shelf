@@ -111,6 +111,12 @@ func (c *Catalog) seriesCover(s *Series) (string, error) {
 		if p := findCover(dir); p != "" {
 			return p, nil
 		}
+		// Concurrent requests for the same cover (a grid loading) wait for
+		// the first to make it instead of each reading page 1.
+		defer c.covers.lock(s.ID)()
+		if p := findCover(dir); p != "" {
+			return p, nil
+		}
 	}
 	// Checked before the copies-disabled return below: the caller then
 	// serves s.Books[0] directly, so it must exist.

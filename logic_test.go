@@ -2,8 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -385,5 +390,71 @@ func TestReleaseDateAndStatus(t *testing.T) {
 		if got != want {
 			t.Errorf("komgaStatus(%q) = %q, want %q (+: publishing finished)", in, got, want)
 		}
+	}
+}
+
+func TestSystemFoldersIgnored(t *testing.T) {
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	root, data := t.TempDir(), t.TempDir()
+	for _, cat := range []string{"a", "b"} {
+		// In every category: would collide (shelf refusing to start) or show as series.
+		for _, sys := range []string{"@eaDir", "#recycle", "LOST+FOUND"} {
+			os.MkdirAll(filepath.Join(root, cat, sys), 0o755)
+			os.WriteFile(filepath.Join(root, cat, sys, "thumb.jpg"), []byte("x"), 0o644)
+		}
+	}
+	writeZip(t, filepath.Join(root, "a", "S", "c1.cbz"), "p1.png", "page")
+	os.MkdirAll(filepath.Join(root, "a", "S", "@eaDir", "c1.cbz"), 0o755) // Synology's thumbnails of c1.cbz
+	os.WriteFile(filepath.Join(root, "a", "S", "@eaDir", "c1.cbz", "SYNOFILE_THUMB_M.jpg"), []byte("x"), 0o644)
+
+	cat := newCatalog(config{root: root, categories: []string{"a", "b"},
+		cacheDir: filepath.Join(data, "cache"), seriesDir: filepath.Join(data, "series"), cacheMax: 1 << 20})
+	if err := cat.refresh(); err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	idx := cat.current()
+	if len(idx.series) != 1 || idx.series[0].Name != "S" {
+		t.Fatalf("series %d, want only S", len(idx.series))
+	}
+	if books := idx.series[0].Books; len(books) != 1 || books[0].Title != "c1" {
+		t.Errorf("S has %d chapters, want only c1", len(books))
+	}
+}
+
+func TestConcurrentCoverRequests(t *testing.T) {
+	cat, _ := testLibrary(t)
+	var zs *Series
+	for _, s := range cat.current().series {
+		if s.Name == "Zip Series" {
+			zs = s
+		}
+	}
+	var wg sync.WaitGroup
+	paths := make([]string, 16)
+	for i := range paths {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p, err := cat.seriesCover(zs)
+			if err != nil {
+				t.Error(err)
+			}
+			paths[i] = p
+		}(i)
+	}
+	wg.Wait()
+	for _, p := range paths {
+		if p != paths[0] || p == "" {
+			t.Fatalf("covers %q, want one path for all", paths)
+		}
+	}
+	entries, _ := os.ReadDir(filepath.Dir(paths[0]))
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if !slices.Contains(names, "cover.png") || slices.ContainsFunc(names, func(n string) bool { return strings.HasPrefix(n, ".tmp-") }) {
+		t.Errorf("series folder: %q, want cover.png and no leftovers", names)
 	}
 }

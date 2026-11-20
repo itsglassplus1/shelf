@@ -86,9 +86,10 @@ type Catalog struct {
 	pages      pageCache
 	zips       zipCache
 	infos      infoCache
-	notes      seriesLog // once-per-change chapter numbering/title notes
-	rar        *rarCache // nil if the cache dir is unusable
-	seriesRoot string    // <data>/series, "" if unusable
+	notes      seriesLog  // once-per-change chapter numbering/title notes
+	rar        *rarCache  // nil if the cache dir is unusable
+	seriesRoot string     // <data>/series, "" if unusable
+	covers     keyedMutex // one cover copy made per series at a time
 }
 
 func newCatalog(cfg config) *Catalog {
@@ -272,7 +273,7 @@ func (c *Catalog) refreshLocked() error {
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if strings.HasPrefix(name, ".") || !isDirEntryDir(dir, e) {
+			if ignoredName(name) || !isDirEntryDir(dir, e) {
 				continue // loose files in a category are ignored
 			}
 			sdir := filepath.Join(dir, name)
@@ -318,6 +319,21 @@ func (c *Catalog) refreshLocked() error {
 	return nil
 }
 
+// systemFolders are folders NAS systems and filesystems put in shared
+// folders: Synology's thumbnail cache and recycle bin, QNAP's recycle bin
+// (the three Komga skips by default), and filesystem-root folders. Matched
+// ignoring case.
+var systemFolders = map[string]bool{
+	"@eadir": true, "#recycle": true, "@recycle": true,
+	"lost+found": true, "$recycle.bin": true, "system volume information": true,
+}
+
+// ignoredName reports whether a file or folder in a category or series is
+// skipped: hidden (starting with "."), or a system folder.
+func ignoredName(name string) bool {
+	return strings.HasPrefix(name, ".") || systemFolders[strings.ToLower(name)]
+}
+
 // isDirEntryDir reports whether e is a directory, following symlinks.
 func isDirEntryDir(parent string, e os.DirEntry) bool {
 	if e.IsDir() {
@@ -347,7 +363,7 @@ func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*S
 	}
 	for _, e := range entries {
 		fname := e.Name()
-		if strings.HasPrefix(fname, ".") {
+		if ignoredName(fname) {
 			continue
 		}
 		p := filepath.Join(dir, fname)

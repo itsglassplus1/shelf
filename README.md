@@ -107,8 +107,11 @@ In the Komga extension (Mihon or Suwayomi):
     Chapter 02/             ...or per folder of images
 ```
 
-- Every folder directly in a category is a series. Names starting with `.` are
-  ignored, as are loose files in a category.
+- Every folder directly in a category is a series. Loose files in a category
+  are ignored.
+- In categories and series, names starting with `.` are ignored, as are NAS
+  and filesystem folders: `@eaDir`, `#recycle`, `@Recycle`, `lost+found`,
+  `$RECYCLE.BIN`, `System Volume Information`.
 - In a series, every supported archive and every sub-folder is a chapter.
 - Series and pages are in natural order (`Chapter 2` before `Chapter 10`).
   The extension orders chapters by number.
