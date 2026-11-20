@@ -143,10 +143,10 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-// checkDataDir logs how to fix a data folder shelf can't write to. The
-// container image runs shelf as uid 1000, so a volume made for an older
-// image (which ran as root) needs its owner changed once. What then fails
-// (the login, RAR chapters, covers) is reported where it fails.
+// checkDataDir logs how to fix a data folder shelf can't write to, e.g. a
+// bind-mounted folder owned by another user than the one shelf runs as
+// (uid 1000 in the container image). What then fails (the login, RAR
+// chapters, covers) is reported where it fails.
 func checkDataDir(dir string) {
 	err := os.MkdirAll(dir, 0o755)
 	if err == nil {
@@ -158,7 +158,6 @@ func checkDataDir(dir string) {
 		}
 	}
 	log.Printf("ERROR: data folder %s is not writable by uid %d: %v\n"+
-		"    give it to that user, e.g. for a volume:\n"+
-		"    podman run --rm -v <volume>:/data docker.io/library/alpine chown -R %d:%d /data",
+		"    give it to that user (chown -R %d:%d) or run shelf as its owner",
 		dir, os.Getuid(), err, os.Getuid(), os.Getgid())
 }

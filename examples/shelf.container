@@ -1,0 +1,48 @@
+# shelf as a rootless Podman Quadlet.
+#
+#   cp shelf.container ~/.config/containers/systemd/
+#   systemctl --user daemon-reload
+#   systemctl --user start shelf
+#
+# The login is created on first start, in credentials in the data volume:
+#   podman volume export shelf-data | tar -xO credentials
+#
+# To keep it running after you log out: loginctl enable-linger $USER
+
+[Unit]
+Description=shelf, a comic and manga server for the Komga extension
+
+[Container]
+Image=ghcr.io/itsglassplus1/shelf:latest
+ContainerName=shelf
+PublishPort=25600:25600
+
+# The library, read only. "z" lets the container read it on SELinux hosts
+# (Fedora, RHEL); harmless elsewhere.
+Volume=/path/to/library:/library:ro,z
+
+# Shelf's own files: login, unpacked RAR chapters, cover and ComicInfo.xml
+# copies.
+Volume=shelf-data:/data
+
+# Category folders inside the library, separated by ":". Each one becomes a
+# library in the extension. See the README for the other settings.
+Environment=SHELF_CATEGORIES=comics:manga
+
+# Shelf runs as uid 1000 in the container. This maps that uid to you on the
+# host: shelf reads the library as you, and its files in /data are yours.
+# Without it, the library must be readable by everyone.
+UserNS=keep-id:uid=1000,gid=1000
+
+# Update the image with "podman auto-update" (or its systemd timer).
+AutoUpdate=registry
+
+# Shelf speaks plain HTTP. Outside a trusted network, put a reverse proxy with
+# TLS in front and publish the port to it only, e.g.
+#   PublishPort=127.0.0.1:25600:25600
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
