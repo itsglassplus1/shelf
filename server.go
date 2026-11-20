@@ -296,6 +296,12 @@ func newServer(cat *Catalog, auth *authenticator) http.Handler {
 	m.HandleFunc("GET /api/v1/collections", emptyPage)
 	m.HandleFunc("GET /api/v1/readlists", emptyPage)
 
+	// Mihon's Komga tracker (separate from the extension) syncs read progress
+	// here. Shelf keeps no read progress: answer 404, which Mihon handles,
+	// without logging it as an unknown request every time.
+	m.HandleFunc("/api/v2/series/{id}/read-progress/tachiyomi", http.NotFound)
+	m.HandleFunc("/api/v1/readlists/{id}/read-progress/tachiyomi", http.NotFound)
+
 	// Values for the extension's filter menus, collected from series metadata.
 	m.HandleFunc("GET /api/v1/genres", s.stringFacet(func(m seriesMeta) []string { return m.Genres }))
 	m.HandleFunc("GET /api/v1/tags", s.stringFacet(func(m seriesMeta) []string { return m.Tags }))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -260,5 +261,27 @@ func TestStartupRejectsBadLibrary(t *testing.T) {
 		if err := cat.refresh(); err == nil {
 			t.Errorf("categories %q: expected the scan to fail", cats)
 		}
+	}
+}
+
+func TestTrackerEndpointsQuiet(t *testing.T) {
+	_, srv := testLibrary(t)
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	for _, tc := range []struct{ method, path string }{
+		{"GET", "/api/v2/series/X/read-progress/tachiyomi"},
+		{"PUT", "/api/v2/series/X/read-progress/tachiyomi"},
+		{"GET", "/api/v1/readlists/X/read-progress/tachiyomi"},
+	} {
+		if code, _ := fetch(t, tc.method, srv.URL+tc.path, `{"lastBookNumberSortRead":3}`); code != 404 {
+			t.Errorf("%s %s: %d, want 404", tc.method, tc.path, code)
+		}
+	}
+	if logs.Len() != 0 {
+		t.Errorf("tracker requests logged: %q", logs.String())
+	}
+	fetch(t, "GET", srv.URL+"/api/v1/something-new", "")
+	if !strings.Contains(logs.String(), "unhandled request GET /api/v1/something-new") {
+		t.Errorf("unknown request not logged: %q", logs.String())
 	}
 }

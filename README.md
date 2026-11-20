@@ -193,7 +193,8 @@ Delete the copy in (2) to have it made again.
 
 ## Not supported
 
-- Reading progress. The extension's Unread, In progress and Read filters do nothing.
+- Reading progress. The extension's Unread, In progress and Read filters do
+  nothing, and Mihon's Komga tracker (Settings > Tracking) can't sync.
 - Collections, read lists and book search: empty results.
 - 7z/cb7 archives and compressed tars.
 - Changing metadata or uploading through the API.
