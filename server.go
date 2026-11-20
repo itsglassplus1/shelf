@@ -142,6 +142,13 @@ func toSeriesDTO(s *Series) seriesDTO {
 	if status == "" {
 		status = "UNKNOWN" // shown as Unknown by the extension
 	}
+	// The extension shows ENDED as Publishing finished when Komga expects
+	// more books than there are, so say there is one more.
+	var totalBookCount *int
+	if m.Status == "ENDED" && m.PublishingFinished {
+		n := len(s.Books) + 1
+		totalBookCount = &n
+	}
 	return seriesDTO{
 		ID: s.ID, LibraryID: s.LibraryID, Name: s.Name,
 		Created: ts(s.Created), LastModified: ts(s.Modified), FileLastModified: ts(s.DirMtime),
@@ -149,14 +156,41 @@ func toSeriesDTO(s *Series) seriesDTO {
 		Metadata: seriesMetadataDTO{
 			Status: status, Created: ts(s.Created), LastModified: ts(s.Modified),
 			Title: m.Title, TitleSort: m.Title, Summary: m.Summary, Publisher: m.Publisher,
-			Genres: m.Genres, Tags: m.Tags,
+			Genres: m.Genres, Tags: m.Tags, TotalBookCount: totalBookCount,
 		},
 		// The extension takes Author/Artist from the books' aggregated authors.
 		BooksMetadata: booksMetadataDTO{
-			Authors: m.Authors, Tags: []string{},
+			Authors: displayAuthors(m.Authors), Tags: []string{},
 			Created: ts(s.Created), LastModified: ts(s.Modified),
 		},
 	}
+}
+
+// otherArtistRoles are the roles Mihon's local source joins into Artist
+// after the pencillers, in its order.
+var otherArtistRoles = []string{"inker", "colorist", "letterer", "cover"}
+
+// displayAuthors returns authors with, after them, every inker, colorist,
+// letterer and cover artist again as a penciller: the extension shows only
+// pencillers as Artist, while Mihon's local source joins all of these.
+// The filter menus keep the real roles (they use the series metadata).
+func displayAuthors(authors []authorDTO) []authorDTO {
+	out := append([]authorDTO{}, authors...) // never nil: sent as []
+	seen := map[string]bool{}
+	for _, a := range authors {
+		if a.Role == "penciller" {
+			seen[strings.ToLower(a.Name)] = true
+		}
+	}
+	for _, role := range otherArtistRoles {
+		for _, a := range authors {
+			if k := strings.ToLower(a.Name); a.Role == role && !seen[k] {
+				seen[k] = true
+				out = append(out, authorDTO{Name: a.Name, Role: "penciller"})
+			}
+		}
+	}
+	return out
 }
 
 func toBookDTO(ch chapter) bookDTO {

@@ -290,6 +290,7 @@ func TestParseComicInfo(t *testing.T) {
   <Title> Chapter 5 </Title><Series>Some Series</Series><Number>5</Number>
   <Writer>Jane, John, jane</Writer><Penciller>Ann</Penciller><Translator>Group A, Group B</Translator>
   <Genre>Action, , Drama</Genre><Tags>One</Tags><Publisher>Pub</Publisher>
+  <ty:Categories>Reading, one</ty:Categories>
   <Year>2024</Year><Month>2</Month><Day>31</Day>
   <ty:PublishingStatusTachiyomi>Completed</ty:PublishingStatusTachiyomi>
 </ComicInfo>`
@@ -305,6 +306,9 @@ func TestParseComicInfo(t *testing.T) {
 	}
 	if !slices.Equal(ci.Genres, []string{"Action", "Drama"}) || !slices.Equal(ci.Translators, []string{"Group A", "Group B"}) {
 		t.Errorf("lists: genres %q translators %q", ci.Genres, ci.Translators)
+	}
+	if !slices.Equal(ci.Tags, []string{"One", "Reading"}) { // categories join the tags, "one" only once
+		t.Errorf("tags %q, want One, Reading", ci.Tags)
 	}
 	wantAuthors := []authorDTO{{"Jane", "writer"}, {"John", "writer"}, {"Ann", "penciller"}} // duplicate "jane" dropped
 	if !slices.Equal(ci.Authors, wantAuthors) {
@@ -322,6 +326,42 @@ func TestParseComicInfo(t *testing.T) {
 	}
 }
 
+func TestDisplayAuthors(t *testing.T) {
+	in := []authorDTO{
+		{"W", "writer"}, {"P", "penciller"}, {"I", "inker"}, {"p", "colorist"},
+		{"L", "letterer"}, {"C", "cover"}, {"I", "cover"}, {"E", "editor"},
+	}
+	got := displayAuthors(in)
+	var artists []string
+	for _, a := range got {
+		if a.Role == "penciller" {
+			artists = append(artists, a.Name)
+		}
+	}
+	// Mihon's order, each name once (case-insensitive); editors aren't artists.
+	if want := []string{"P", "I", "L", "C"}; !slices.Equal(artists, want) {
+		t.Errorf("artists %q, want %q", artists, want)
+	}
+	if !slices.Equal(got[:len(in)], in) {
+		t.Errorf("original authors changed: %v", got[:len(in)])
+	}
+	if got := displayAuthors([]authorDTO{}); got == nil {
+		t.Error("empty authors: got nil, want [] (sent as JSON)")
+	}
+}
+
+func TestSeriesDTOStatus(t *testing.T) {
+	s := &Series{Books: []*Book{{}, {}}, Meta: seriesMeta{Status: "ENDED", PublishingFinished: true, Authors: []authorDTO{}}}
+	// The extension shows Publishing finished for ENDED when booksCount < totalBookCount.
+	if d := toSeriesDTO(s); d.Metadata.TotalBookCount == nil || d.BooksCount >= *d.Metadata.TotalBookCount {
+		t.Errorf("publishing finished: booksCount %d, totalBookCount %v", d.BooksCount, d.Metadata.TotalBookCount)
+	}
+	s.Meta.PublishingFinished = false // Completed
+	if d := toSeriesDTO(s); d.Metadata.TotalBookCount != nil {
+		t.Errorf("completed: totalBookCount %d, want null", *d.Metadata.TotalBookCount)
+	}
+}
+
 func TestReleaseDateAndStatus(t *testing.T) {
 	for _, tc := range [][4]string{
 		{"2020", "5", "17", "2020-05-17"},
@@ -335,11 +375,15 @@ func TestReleaseDateAndStatus(t *testing.T) {
 		}
 	}
 	for in, want := range map[string]string{
-		"Ongoing": "ONGOING", "Completed": "ENDED", "Publishing finished": "ENDED",
-		"Cancelled": "ABANDONED", "On hiatus": "HIATUS", "Unknown": "", "": "",
+		"Ongoing": "ONGOING", "Completed": "ENDED", "Publishing finished": "ENDED+",
+		"Cancelled": "ABANDONED", "On hiatus": "HIATUS", "Licensed": "", "Unknown": "", "": "",
 	} {
-		if got := komgaStatus(in); got != want {
-			t.Errorf("komgaStatus(%q) = %q, want %q", in, got, want)
+		got, finished := komgaStatus(in)
+		if finished {
+			got += "+"
+		}
+		if got != want {
+			t.Errorf("komgaStatus(%q) = %q, want %q (+: publishing finished)", in, got, want)
 		}
 	}
 }

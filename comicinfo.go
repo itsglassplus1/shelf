@@ -55,11 +55,13 @@ type comicInfoXML struct {
 	Month       string `xml:"Month"`
 	Day         string `xml:"Day"`
 	Status      string `xml:"PublishingStatusTachiyomi"`
+	Categories  string `xml:"Categories"` // <ty:Categories>: Mihon library categories
 }
 
 type comicInfo struct {
 	Title, Series, Number, Summary, Publisher string
 	Status                                    string // Komga status: ONGOING, ENDED, ABANDONED, HIATUS, or ""
+	PublishingFinished                        bool   // ENDED, but not all of it is available (Mihon's "Publishing finished")
 	Genres, Tags                              []string
 	Authors                                   []authorDTO // creators (not translators)
 	Translators                               []string
@@ -85,10 +87,12 @@ func parseComicInfo(r io.Reader) (*comicInfo, error) {
 		Number:    strings.TrimSpace(x.Number),
 		Summary:   strings.TrimSpace(x.Summary),
 		Publisher: strings.TrimSpace(x.Publisher),
-		Status:    komgaStatus(x.Status),
 		Genres:    splitList(x.Genre),
-		Tags:      splitList(x.Tags),
+		// Mihon shows Genre, Tags and Categories together as genres; so does
+		// the extension with Komga's genres and tags.
+		Tags: splitList(x.Tags + "," + x.Categories),
 	}
+	ci.Status, ci.PublishingFinished = komgaStatus(x.Status)
 	// Role names as Komga uses them; the extension shows writer as Author
 	// and penciller as Artist.
 	for _, r := range []struct{ role, names string }{
@@ -120,18 +124,22 @@ func splitList(s string) []string {
 }
 
 // komgaStatus maps Mihon's PublishingStatusTachiyomi values to Komga's.
-func komgaStatus(s string) string {
+// "Publishing finished" is ENDED with publishingFinished set (see
+// toSeriesDTO). Komga has nothing for "Licensed", which stays unknown.
+func komgaStatus(s string) (status string, publishingFinished bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "ongoing":
-		return "ONGOING"
-	case "completed", "publishing finished":
-		return "ENDED"
+		return "ONGOING", false
+	case "completed":
+		return "ENDED", false
+	case "publishing finished":
+		return "ENDED", true
 	case "cancelled", "canceled":
-		return "ABANDONED"
+		return "ABANDONED", false
 	case "on hiatus", "hiatus":
-		return "HIATUS"
+		return "HIATUS", false
 	}
-	return ""
+	return "", false
 }
 
 func releaseDate(y, m, d string) string {

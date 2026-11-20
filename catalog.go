@@ -48,6 +48,7 @@ type Series struct {
 // <Series> if present, else the folder name; IDs always use the folder name.
 type seriesMeta struct {
 	Title, Summary, Status, Publisher string
+	PublishingFinished                bool // see comicInfo
 	Genres, Tags                      []string
 	Authors                           []authorDTO
 }
@@ -445,6 +446,7 @@ func (s *Series) loadMeta(seriesRoot string) {
 		s.Meta.Title = info.Series
 	}
 	s.Meta.Summary, s.Meta.Status, s.Meta.Publisher = info.Summary, info.Status, info.Publisher
+	s.Meta.PublishingFinished = info.PublishingFinished
 	s.Meta.Genres, s.Meta.Tags = info.Genres, info.Tags
 	if info.Authors != nil {
 		s.Meta.Authors = info.Authors
