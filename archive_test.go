@@ -284,7 +284,33 @@ func TestRarCacheUnpack(t *testing.T) {
 			if entries, _ := os.ReadDir(cache); len(entries) != 1 {
 				t.Errorf("cache has %d entries, want 1 (no leftover temp folders)", len(entries))
 			}
+
+			// A damaged entry (manifest gone, folder still there) is unpacked again.
+			os.Remove(filepath.Join(filepath.Dir(pages[0].path), manifestName))
+			if again, err := rc.pages(b, fi); err != nil || len(again) != 2 {
+				t.Errorf("after losing the manifest: %v, %v", again, err)
+			}
 		})
+	}
+
+	// Entries from another cache version (or another version of the archive)
+	// are replaced, not reused.
+	{
+		lib, cache := t.TempDir(), t.TempDir()
+		p0 := writeRar(t, lib, "ch.cbr", rarNormal)
+		fi0, _ := os.Stat(p0)
+		// Named as a shelf without cache versions named it, for this very
+		// archive, with an empty page list: reusing it would give no pages.
+		stale := filepath.Join(cache, fmt.Sprintf("BOOK-%x-%x", fi0.ModTime().UnixNano(), fi0.Size()))
+		os.MkdirAll(stale, 0o755)
+		os.WriteFile(filepath.Join(stale, manifestName), []byte(`[]`), 0o644)
+		pages, err := newRarCache(cache, 1<<20).pages(&Book{ID: "BOOK", Path: p0}, fi0)
+		if err != nil || len(pages) != 2 {
+			t.Errorf("with a stale entry: %v, %v", pages, err)
+		}
+		if _, err := os.Stat(stale); !os.IsNotExist(err) {
+			t.Errorf("stale entry not removed: %v", err)
+		}
 	}
 
 	// An archive that unpacks to more than the cache cap is refused.

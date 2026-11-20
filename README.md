@@ -49,7 +49,7 @@ The image runs shelf as uid and gid 1000, usually the host's first user.
 | `SHELF_CATEGORIES` | (required) | Category folders inside `SHELF_ROOT`, separated by `:`, e.g. `comics/marvel:manga`. Each becomes a Komga library. |
 | `SHELF_ROOT` | `/library` | Library root. Read only. |
 | `SHELF_DATA_DIR` | `/data` | Writable folder for shelf's own files. |
-| `SHELF_CACHE_MAX_MB` | `1024` | Soft size cap for unpacked RAR chapters. |
+| `SHELF_CACHE_MAX_MB` | `1024` | Soft size cap for unpacked RAR chapters. A RAR chapter that unpacks to more can't be read. |
 | `SHELF_LISTEN` | `:25600` | Listen address. |
 | `SHELF_AUTH` | `on` | `off` serves without a login. |
 

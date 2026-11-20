@@ -26,6 +26,12 @@ import (
 // Covers are the exception: rarFirstPage reads just the first page, so
 // browsing a grid of RAR series doesn't unpack a chapter per series.
 
+// rarCacheVersion is part of every unpacked chapter's folder name. Raise it
+// when unpacking changes (which entries are pages, their order, the
+// manifest), so chapters unpacked by an older shelf are unpacked again; the
+// old folders are removed as they are replaced, or evicted.
+const rarCacheVersion = 1
+
 const (
 	manifestName  = "manifest.json"
 	rarMaxDictMem = 256 << 20 // refuse archives needing a larger decode window
@@ -154,8 +160,9 @@ func (rc *rarCache) pages(b *Book, fi os.FileInfo) ([]pageEntry, error) {
 	if rc == nil {
 		return nil, errors.New("RAR chapters need a writable cache dir (cache/ inside SHELF_DATA_DIR)")
 	}
-	// The key includes mtime and size, so a changed archive is unpacked afresh.
-	key := fmt.Sprintf("%s-%x-%x", b.ID, fi.ModTime().UnixNano(), fi.Size())
+	// The key includes mtime and size, so a changed archive is unpacked
+	// afresh, and the cache version, so a shelf that unpacks differently does too.
+	key := fmt.Sprintf("%s-v%d-%x-%x", b.ID, rarCacheVersion, fi.ModTime().UnixNano(), fi.Size())
 	dir := filepath.Join(rc.dir, key)
 
 	// Locked per chapter (not per version), so cleaning up older versions
@@ -165,6 +172,11 @@ func (rc *rarCache) pages(b *Book, fi os.FileInfo) ([]pageEntry, error) {
 	if pages, err := readManifest(dir); err == nil {
 		touch(dir)
 		return pages, nil
+	}
+	// Unpack again. A folder without a readable manifest (damaged, or being
+	// evicted) would block moving the new one into place: remove it first.
+	if err := os.RemoveAll(dir); err != nil {
+		return nil, err
 	}
 
 	release := decodeSlot()
