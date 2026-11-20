@@ -16,11 +16,12 @@ podman run -d --name shelf \
   -v /path/to/library:/library:ro \
   -v shelf-data:/data \
   -e SHELF_CATEGORIES=comics:manga \
-  ghcr.io/itsglassplus1/shelf:main
+  ghcr.io/itsglassplus1/shelf:latest
 ```
 
-Images are built for amd64 and arm64. `:main` follows the main branch; version
-tags `v1.2.3` publish `:1.2.3`, `:1.2`, `:1` and `:latest`.
+Images are built for amd64 and arm64 and published for version tags: `v1.2.3`
+publishes `:1.2.3`, `:1.2`, `:1` and `:latest`. `:main` is a development build,
+published only when the workflow is run by hand.
 
 To build locally: `podman build -t localhost/shelf .` (runs the tests first).
 
