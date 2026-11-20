@@ -333,7 +333,7 @@ func isDirEntryDir(parent string, e os.DirEntry) bool {
 // chapterExts are the archive extensions taken as chapters. The actual
 // format is detected from the file's content when it's opened.
 var chapterExts = map[string]bool{
-	".cbz": true, ".zip": true, ".cbr": true, ".rar": true, ".cbt": true, ".tar": true,
+	".cbz": true, ".zip": true, ".cbr": true, ".rar": true, ".cbt": true, ".tar": true, ".epub": true,
 }
 
 func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*Series, error) {
@@ -388,12 +388,15 @@ func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*S
 // loadMeta reads series metadata, in order of preference, from:
 //  1. ComicInfo.xml in the library's series folder;
 //  2. the copy in <data>/series/<name>/ComicInfo.xml;
-//  3. the latest chapter's ComicInfo.xml, which is then copied to (2).
+//  3. the latest chapter's ComicInfo.xml, which is then copied to (2); for
+//     an EPUB, the author and description from its package document (not
+//     copied).
 //
 // Unreadable files are logged and ignored.
 func (s *Series) loadMeta(seriesRoot string) {
 	var raw []byte
 	var err error
+	var fromEpub *comicInfo // case (3) with an EPUB
 	copyPath := ""
 	if seriesRoot != "" {
 		copyPath = filepath.Join(seriesRoot, s.Name, comicInfoName)
@@ -405,6 +408,14 @@ func (s *Series) loadMeta(seriesRoot string) {
 	case copyPath != "" && fileExists(copyPath): // (2)
 		s.MetaSrc = copyPath
 		raw, err = readSmallFile(copyPath)
+	case len(s.Books) > 0 && isEpub(s.Books[len(s.Books)-1]): // (3), an EPUB: author and description only
+		s.MetaSrc = copyPath // watch for a copy being placed by hand
+		latest := s.Books[len(s.Books)-1]
+		if e, eerr := readEpubInfo(latest.Path); eerr != nil {
+			log.Printf("WARN: series %q: ignoring unreadable EPUB metadata in %s: %v", s.Name, latest.Path, eerr)
+		} else {
+			fromEpub = &comicInfo{Summary: e.Summary, Authors: e.Authors, Genres: []string{}, Tags: []string{}}
+		}
 	case len(s.Books) > 0: // (3)
 		latest := s.Books[len(s.Books)-1]
 		raw, err = readBookComicInfoRaw(latest)
@@ -428,6 +439,9 @@ func (s *Series) loadMeta(seriesRoot string) {
 	var info *comicInfo
 	if err == nil && raw != nil {
 		info, err = parseComicInfo(bytes.NewReader(raw))
+	}
+	if info == nil && err == nil {
+		info = fromEpub
 	}
 	if err != nil {
 		log.Printf("WARN: ignoring unreadable ComicInfo for series %q (%s): %v", s.Name, s.MetaSrc, err)

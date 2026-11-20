@@ -203,6 +203,8 @@ func toBookDTO(ch chapter) bookDTO {
 		mediaType = "application/x-rar-compressed"
 	case ext == ".cbt" || ext == ".tar":
 		mediaType = "application/x-tar"
+	case ext == ".epub":
+		mediaType = "application/epub+zip" // offered as image pages (mediaProfile DIVINA)
 	}
 	authors := []authorDTO{}
 	var releaseDate *string

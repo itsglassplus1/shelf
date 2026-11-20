@@ -205,6 +205,9 @@ func comicInfoSource(b *Book) string {
 // readBookComicInfoRaw returns a chapter's raw ComicInfo.xml, or nil, nil if
 // it has none.
 func readBookComicInfoRaw(b *Book) ([]byte, error) {
+	if isEpub(b) {
+		return nil, nil // EPUB metadata comes from its package document, as in Mihon
+	}
 	if b.IsDir {
 		data, err := readSmallFile(comicInfoSource(b))
 		if errors.Is(err, os.ErrNotExist) {
@@ -227,6 +230,9 @@ func readBookComicInfoRaw(b *Book) ([]byte, error) {
 
 // readBookComicInfo returns a chapter's parsed ComicInfo, or nil, nil if it has none.
 func readBookComicInfo(b *Book) (*comicInfo, error) {
+	if isEpub(b) {
+		return readEpubInfo(b.Path)
+	}
 	data, err := readBookComicInfoRaw(b)
 	if err != nil || data == nil {
 		return nil, err

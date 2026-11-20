@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -252,6 +253,13 @@ func (c *Catalog) listZipPages(b *Book) ([]pageEntry, error) {
 		return nil, err
 	}
 	defer release()
+	if isEpub(b) {
+		pages, err := epubPages(&r.Reader)
+		if err == nil {
+			return pages, nil
+		}
+		log.Printf("WARN: %s: no usable EPUB package document, listing all images in name order: %v", b.Path, err)
+	}
 	var pages []pageEntry
 	for i, f := range r.File {
 		n := f.Name
