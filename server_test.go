@@ -133,11 +133,16 @@ func TestServerBrowse(t *testing.T) {
 		t.Errorf("huge page number: %d results", len(page.Content))
 	}
 
-	// Shared ComicInfo titles become file names; no <Number>: filename order.
+	// Shared ComicInfo titles become file names; no <Number>: numbers from
+	// the file names. Newest first.
 	books := booksOf(t, base, zs.ID)
+	if len(books) != 3 {
+		t.Fatalf("Zip Series: %d books, want 3", len(books))
+	}
 	for i, b := range books {
-		wantTitle, wantNum := fmt.Sprintf("c%d", i+1), fmt.Sprint(i+1)
-		if b.Metadata.Title != wantTitle || b.Metadata.Number != wantNum || b.Metadata.NumberSort != float64(i+1) {
+		num := 3 - i
+		wantTitle, wantNum := fmt.Sprintf("c%d", num), fmt.Sprint(num)
+		if b.Metadata.Title != wantTitle || b.Metadata.Number != wantNum || b.Metadata.NumberSort != float64(num) {
 			t.Errorf("book %d: title %q number %q/%v; want %q %s", i, b.Metadata.Title, b.Metadata.Number, b.Metadata.NumberSort, wantTitle, wantNum)
 		}
 	}
@@ -182,7 +187,8 @@ func TestServerPages(t *testing.T) {
 		{"Folder Series", []string{"folder page 1", "folder page 2"}}, // natural order, not directory order
 		{"Rar Series", []string{"PAGE-ONE", "PAGE-TWO"}},              // natural order, not archive order
 	} {
-		b := booksOf(t, base, all[tc.series].ID)[0]
+		books := booksOf(t, base, all[tc.series].ID)
+		b := books[len(books)-1] // the first chapter: books are listed newest first
 		var list []pageDTO
 		fetchJSON(t, "GET", base+"/api/v1/books/"+b.ID+"/pages", "", &list)
 		if len(list) != len(tc.pages) {

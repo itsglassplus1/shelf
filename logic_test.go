@@ -71,31 +71,52 @@ func numbersOf(chs []chapter) (nums []float64, strs []string) {
 }
 
 func TestChapterNumbers(t *testing.T) {
-	files := []string{"a.cbz", "b.cbz", "c.cbz"}
-	none := []string{"-", "-", "-"}
 	for _, tc := range []struct {
 		name     string
-		numbers  []string
+		files    []string
+		titles   []string // ComicInfo <Title>, "-" for none
+		numbers  []string // ComicInfo <Number>, "-" for none
 		wantNums []float64
 		wantStrs []string
-		wantLog  string // substring of the log lines; "" means no log
+		wantLog  string // substring of the log line; "" means no log
 	}{
-		{"all valid and distinct: ComicInfo kept, decimals too",
-			[]string{"101", "102", "102.5"}, []float64{101, 102, 102.5}, []string{"101", "102", "102.5"}, ""},
-		{"none have a number: filename order, no log",
-			none, []float64{1, 2, 3}, []string{"1", "2", "3"}, ""},
-		{"one missing: whole series falls back",
-			[]string{"101", "-", "103"}, []float64{1, 2, 3}, []string{"1", "2", "3"}, "missing or not a number in 1 of 3 chapters: b.cbz"},
-		{"repeated: whole series falls back",
-			[]string{"1", "1", "1"}, []float64{1, 2, 3}, []string{"1", "2", "3"}, "repeated 1: a.cbz, b.cbz, c.cbz"},
-		{"non-numeric",
-			[]string{"1", "Oneshot", "3"}, []float64{1, 2, 3}, []string{"1", "2", "3"}, `b.cbz ("Oneshot")`},
-		{"negative and NaN are not usable",
-			[]string{"-1", "NaN", "3"}, []float64{1, 2, 3}, []string{"1", "2", "3"}, "2 of 3"},
+		{"ComicInfo numbers, decimals too",
+			[]string{"a.cbz", "b.cbz", "c.cbz"}, []string{"-", "-", "-"}, []string{"101", "102", "102.5"},
+			[]float64{101, 102, 102.5}, []string{"101", "102", "102.5"}, ""},
+		{"file names, as Mihon reads them",
+			[]string{"Vol.1 Ch.1.cbz", "Vol.1 Ch.2.cbz", "Vol.1 Ch.2.5.cbz", "Vol.2 Ch.3 Part 2.cbz"},
+			[]string{"-", "-", "-", "-"}, []string{"-", "-", "-", "-"},
+			[]float64{1, 2, 2.5, 3.2}, []string{"1", "2", "2.5", "3.2"}, ""}, // the float is kept, as in Mihon
+		{"ComicInfo number per chapter, file names for the rest",
+			[]string{"c1.cbz", "c2.cbz", "c3.cbz"}, []string{"-", "-", "-"}, []string{"-", "50", "-"},
+			[]float64{1, 50, 3}, []string{"1", "50", "3"}, ""},
+		{"ComicInfo number that isn't one: file name",
+			[]string{"c7.cbz", "c8.cbz"}, []string{"-", "-"}, []string{"Oneshot", "NaN"},
+			[]float64{7, 8}, []string{"7", "8"}, ""},
+		{"no number in the file name: read from the title with the whole list",
+			[]string{"a.cbz", "b.cbz", "c.cbz"}, []string{"Chapter 1", "Side Story", "Chapter 3"}, []string{"-", "-", "-"},
+			[]float64{1, 1.5, 3}, []string{"1", "1.5", "3"}, ""},
+		{"numbers shared by every file name are left out",
+			[]string{"Group 2 Chapter 385.cbz", "Group 2 Chapter 386.cbz", "Group 2 Chapter 387.cbz"},
+			[]string{"-", "-", "-"}, []string{"-", "-", "-"},
+			[]float64{385, 386, 387}, []string{"385", "386", "387"}, ""},
+		{"a year in every file name is left out",
+			[]string{"Series (2017) #001.cbz", "Series (2017) #002.cbz", "Series (2017) #003.cbz"},
+			[]string{"-", "-", "-"}, []string{"-", "-", "-"},
+			[]float64{1, 2, 3}, []string{"1", "2", "3"}, ""},
+		{"file name numbers win over title numbers",
+			[]string{"c1.cbz", "c2.cbz"}, []string{"Chapter 10", "Chapter 20"}, []string{"-", "-"},
+			[]float64{1, 2}, []string{"1", "2"}, ""},
+		{"title number, not a neighbour fill from file names",
+			[]string{"c1.cbz", "extra.cbz", "c3.cbz"}, []string{"-", "Chapter 2.5", "-"}, []string{"-", "-", "-"},
+			[]float64{1, 2.5, 3}, []string{"1", "2.5", "3"}, ""},
+		{"no number anywhere: -2, logged",
+			[]string{"Bar.cbz", "Foo.cbz"}, []string{"-", "-"}, []string{"-", "-"},
+			[]float64{-2, -2}, []string{"", ""}, "2 of 2 chapters: Bar.cbz, Foo.cbz"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			chs := testChapters(files, none, tc.numbers)
-			why := strings.Join(chapterNumbers(chs), "\n")
+			chs := testChapters(tc.files, tc.titles, tc.numbers)
+			why := strings.Join(chapterNumbers("Series", chs), "\n")
 			nums, strs := numbersOf(chs)
 			if !slices.Equal(nums, tc.wantNums) || !slices.Equal(strs, tc.wantStrs) {
 				t.Errorf("numbers %v %q, want %v %q", nums, strs, tc.wantNums, tc.wantStrs)

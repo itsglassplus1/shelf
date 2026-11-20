@@ -548,9 +548,12 @@ func (s *server) seriesBooks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chapters := s.cat.chapters(se)
+	// Newest first, like Mihon's local source: the extension sorts by number
+	// with a stable sort, so chapters sharing a number (or without one) keep
+	// this order.
 	out := make([]bookDTO, len(chapters))
 	for i, ch := range chapters {
-		out[i] = toBookDTO(ch)
+		out[len(out)-1-i] = toBookDTO(ch)
 	}
 	writeJSON(w, paginate(out, 0, 0)) // always unpaged
 }

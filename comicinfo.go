@@ -281,9 +281,8 @@ type chapter struct {
 }
 
 // chapters returns a series' chapters in filename order with their metadata.
-// Numbers come from ComicInfo <Number> only if every chapter has a distinct
-// numeric one; otherwise the whole series is numbered by filename order (see
-// chapterNumbers). Titles are made unique (see uniqueTitles).
+// Numbers are recognized as Mihon's local source does (see chapterNumbers).
+// Titles are made unique (see uniqueTitles).
 func (c *Catalog) chapters(s *Series) []chapter {
 	out := make([]chapter, len(s.Books))
 	var wg sync.WaitGroup
@@ -305,80 +304,71 @@ func (c *Catalog) chapters(s *Series) []chapter {
 			ch.title = ch.info.Title
 		}
 	}
+	// Before uniqueTitles: numbers are read from the titles as they are.
 	c.notes.report(s, "numbers",
-		"chapters numbered by filename order, because ComicInfo <Number> is not usable:",
-		chapterNumbers(out))
+		"chapters without a recognizable number (number -2, listed last by the extension):",
+		chapterNumbers(s.Meta.Title, out))
 	c.notes.report(s, "titles",
 		"chapters sharing a title were renamed so Suwayomi keeps them apart:",
 		uniqueTitles(out))
 	return out
 }
 
-// chapterNumbers sets every chapter's number. ComicInfo <Number> values are
-// used only if every chapter has one, each is a non-negative number, and no
-// two are equal. Otherwise all chapters get their position in filename order
-// (1, 2, 3, ...): mixing the two would misplace chapters (position 3 among
-// chapters 101-120), and repeated numbers make the extension's order of those
-// chapters arbitrary and look like one chapter to trackers.
+// noChapterNumber is sent for chapters without a recognizable number. Mihon
+// and Suwayomi treat -2 as a number the source left out on purpose and keep
+// it; with -1 they would re-read the chapter name the extension builds, which
+// by default ends in the file size ("{number} - {title} ({size})"), and take
+// the size for the chapter number.
+const noChapterNumber = -2
+
+// chapterNumbers numbers chapters like Mihon's local source and its chapter
+// sync, in two passes over the whole list, from the newest chapter:
 //
-// It returns log lines explaining a fallback; none when the ComicInfo
-// numbers were used or when no chapter has a <Number> at all.
-func chapterNumbers(out []chapter) []string {
-	nums := make([]float64, len(out))
-	var missing []string // no ComicInfo, no <Number>, or not a usable number
-	byNum := map[float64][]string{}
-	present := 0
-	for i, ch := range out {
-		name := filepath.Base(ch.Book.Path)
-		raw := ""
+//  1. the file and folder names (without extension), recognized but not
+//     filled in. A ComicInfo <Number> that parses as a number wins.
+//  2. the displayed titles (ComicInfo <Title>, else the name) of chapters
+//     still without a number, now also filled in from their neighbours.
+//
+// Unlike Mihon's local source, which reads each file name on its own, pass 1
+// reads the names together, so a number every similar name shares (a group
+// tag, a year) is left out: "Group 2 Chapter 387" is 387, not 2.
+//
+// Chapters left without a number get noChapterNumber. It returns one log line
+// listing them, or none.
+func chapterNumbers(seriesTitle string, out []chapter) []string {
+	// Index i in the passes is chapter len(out)-1-i: newest first.
+	at := func(i int) *chapter { return &out[len(out)-1-i] }
+	list := make([]numberedChapter, len(out))
+	for i := range list {
+		ch := at(i)
+		list[i] = numberedChapter{name: ch.Book.Title, number: -1}
 		if ch.info != nil {
-			raw = ch.info.Number
-		}
-		if raw != "" {
-			present++
-		}
-		n, err := strconv.ParseFloat(raw, 64)
-		if err != nil || n < 0 || math.IsInf(n, 0) || math.IsNaN(n) {
-			if raw == "" {
-				missing = append(missing, name)
-			} else {
-				missing = append(missing, fmt.Sprintf("%s (%q)", name, raw))
+			if v, err := strconv.ParseFloat(ch.info.Number, 64); err == nil && !math.IsInf(v, 0) && !math.IsNaN(v) {
+				list[i].number = v
 			}
+		}
+	}
+	for i, numbering := range recognizeChapterNumbers(seriesTitle, list, false) {
+		list[i].name = at(i).title
+		if numbering.chapter != "" {
+			list[i].number = chapterNumberToFloat(numbering.chapter)
+		}
+	}
+	var missing []string
+	for i, numbering := range parseChapterNumbers(seriesTitle, list) {
+		ch := at(i)
+		if numbering.chapter == "" {
+			ch.number, ch.numberStr = noChapterNumber, ""
+			missing = append(missing, filepath.Base(ch.Book.Path))
 			continue
 		}
-		nums[i] = n
-		byNum[n] = append(byNum[n], name)
+		ch.number, ch.numberStr = chapterNumberToFloat(numbering.chapter), numbering.chapter
 	}
-
-	var dups []string
-	for n, names := range byNum {
-		if len(names) > 1 {
-			dups = append(dups, fmt.Sprintf("%s: %s", strconv.FormatFloat(n, 'f', -1, 64), listSome(names)))
-		}
-	}
-	slices.SortFunc(dups, naturalCompare)
-
-	if len(missing) == 0 && len(dups) == 0 {
-		for i := range out {
-			out[i].number, out[i].numberStr = nums[i], out[i].info.Number
-		}
+	if len(missing) == 0 {
 		return nil
 	}
-	for i := range out {
-		out[i].number = float64(out[i].Book.Number)
-		out[i].numberStr = strconv.Itoa(out[i].Book.Number)
-	}
-	if present == 0 {
-		return nil // no chapter has a <Number>: filename order is simply the plan
-	}
-	var why []string
-	if len(missing) > 0 {
-		why = append(why, fmt.Sprintf("    missing or not a number in %d of %d chapters: %s", len(missing), len(out), listSome(missing)))
-	}
-	for _, d := range dups {
-		why = append(why, "    repeated "+d)
-	}
-	return why
+	slices.SortFunc(missing, naturalCompare)
+	return []string{fmt.Sprintf("    %d of %d chapters: %s", len(missing), len(out), listSome(missing))}
 }
 
 // listSome joins up to 5 names, noting how many more there are.
