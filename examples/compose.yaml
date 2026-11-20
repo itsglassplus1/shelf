@@ -34,6 +34,12 @@ services:
     # library must be readable by it. To run as someone else:
     # user: "1001:1001"
 
+    # Shelf only writes to /data and needs no privileges: the rest of the
+    # container is read only, it has no capabilities, and can't gain any.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
   # Suwayomi in the same file can reach shelf at http://shelf:25600. If
   # nothing else can reach shelf (no "ports" above), the login can be turned
   # off with SHELF_AUTH: "off".

@@ -34,6 +34,12 @@ Environment=SHELF_CATEGORIES=comics:manga
 # Without it, the library must be readable by everyone.
 UserNS=keep-id:uid=1000,gid=1000
 
+# Shelf only writes to /data and needs no privileges: the rest of the
+# container is read only, it has no capabilities, and can't gain any.
+ReadOnly=true
+DropCapability=all
+NoNewPrivileges=true
+
 # Update the image with "podman auto-update" (or its systemd timer).
 AutoUpdate=registry
 
