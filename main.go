@@ -33,6 +33,7 @@ package main
 
 import (
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,6 +53,9 @@ type config struct {
 	cacheMax    int64  // bytes
 }
 
+// maxCacheMB keeps the cache cap in bytes within an int64 (8 EiB).
+const maxCacheMB = math.MaxInt64 >> 20
+
 func envOr(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
@@ -70,8 +74,8 @@ func loadConfig() config {
 		credentials: filepath.Join(data, credentialsName),
 	}
 	mb, err := strconv.ParseInt(envOr("SHELF_CACHE_MAX_MB", "1024"), 10, 64)
-	if err != nil || mb <= 0 {
-		log.Fatalf("ERROR: SHELF_CACHE_MAX_MB must be a positive number of MB, got %q", os.Getenv("SHELF_CACHE_MAX_MB"))
+	if err != nil || mb <= 0 || mb > maxCacheMB {
+		log.Fatalf("ERROR: SHELF_CACHE_MAX_MB must be a number of MB from 1 to %d, got %q", maxCacheMB, os.Getenv("SHELF_CACHE_MAX_MB"))
 	}
 	cfg.cacheMax = mb << 20
 	for _, c := range strings.Split(os.Getenv("SHELF_CATEGORIES"), ":") {

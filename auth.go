@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,11 +31,24 @@ import (
 // successful login also sets a session cookie, sparing it a refused request
 // every time. Changing the password or restarting shelf ends all sessions;
 // the extension then simply logs in again.
+//
+// A wrong username or password is answered after failedLoginDelay, slowing
+// down guessing, and logged with the client's address (at most once per
+// address per failedLoginLogEvery, with a count of the attempts in between),
+// so fail2ban and the like can act on it. Requests without credentials are
+// part of the normal login and are not logged.
+//
+// Shelf speaks plain HTTP: the password and the session cookie can be read
+// on the way. Outside a trusted network, put a reverse proxy with TLS in
+// front. Behind a proxy, the logged address is the proxy's.
 
 const (
-	credentialsName  = "credentials"
-	credentialsCheck = 2 * time.Second
-	sessionCookie    = "shelf_session"
+	credentialsName     = "credentials"
+	credentialsCheck    = 2 * time.Second
+	sessionCookie       = "shelf_session"
+	failedLoginDelay    = time.Second
+	failedLoginLogEvery = time.Minute
+	failedLoginMaxAddrs = 1000 // addresses remembered for rate-limiting the log
 )
 
 type authenticator struct {
@@ -48,13 +62,22 @@ type authenticator struct {
 	size      int64
 	lastCheck time.Time
 	lastError string // last logged reload error, to avoid repeating it
+
+	failDelay time.Duration // failedLoginDelay; shorter in tests
+	failMu    sync.Mutex
+	failures  map[string]*failedLogins // by client address
+}
+
+type failedLogins struct {
+	logged     time.Time // when the last line for this address was logged
+	suppressed int       // failures since then, not logged yet
 }
 
 // newAuthenticator loads the credentials file at path, creating it first if
 // it doesn't exist. An unreadable or invalid file is an error: shelf doesn't
 // start rather than run without the login the user configured.
 func newAuthenticator(path string) (*authenticator, error) {
-	a := &authenticator{path: path, sessionKey: make([]byte, 32)}
+	a := &authenticator{path: path, sessionKey: make([]byte, 32), failDelay: failedLoginDelay}
 	rand.Read(a.sessionKey)
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := createCredentials(path); err != nil {
@@ -76,6 +99,7 @@ func createCredentials(path string) error {
 	content := "# shelf login, for the Komga extension's username and password settings.\n" +
 		"# Edit and save to change them: shelf picks up the change within seconds.\n" +
 		"# Delete this file to get a new random password.\n" +
+		"# Spaces around the username and password are ignored.\n" +
 		"username = admin\n" +
 		"password = " + base64.RawURLEncoding.EncodeToString(pw) + "\n"
 	if err := writeAtomic(filepath.Dir(path), filepath.Base(path), strings.NewReader(content)); err != nil {
@@ -199,10 +223,59 @@ func (a *authenticator) allow(w http.ResponseWriter, r *http.Request) bool {
 			})
 			return true
 		}
+		a.noteFailure(r)
+		select { // slow down guessing; give up early if the client leaves
+		case <-time.After(a.failDelay):
+		case <-r.Context().Done():
+			return false
+		}
 	}
 	w.Header().Set("WWW-Authenticate", `Basic realm="shelf", charset="UTF-8"`)
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 	return false
+}
+
+// noteFailure logs a failed login from r's address: the first, then at most
+// one line per failedLoginLogEvery, counting the attempts in between. The
+// username tried isn't logged: it is sometimes a mistyped password.
+func (a *authenticator) noteFailure(r *http.Request) {
+	addr := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		addr = host
+	}
+	now := time.Now()
+	a.failMu.Lock()
+	defer a.failMu.Unlock()
+	if a.failures == nil || len(a.failures) >= failedLoginMaxAddrs {
+		for k, f := range a.failures { // forget quiet addresses (flushing their counts)
+			if now.Sub(f.logged) >= failedLoginLogEvery {
+				if f.suppressed > 0 {
+					log.Printf("WARN: auth: %d more failed logins from %s", f.suppressed, k)
+				}
+				delete(a.failures, k)
+			}
+		}
+		if a.failures == nil {
+			a.failures = map[string]*failedLogins{}
+		}
+	}
+	f := a.failures[addr]
+	switch {
+	case f == nil:
+		if len(a.failures) < failedLoginMaxAddrs {
+			a.failures[addr] = &failedLogins{logged: now}
+		}
+		log.Printf("WARN: auth: failed login from %s", addr)
+	case now.Sub(f.logged) >= failedLoginLogEvery:
+		more := ""
+		if f.suppressed > 0 {
+			more = fmt.Sprintf(" (and %d more since %s)", f.suppressed, f.logged.Format(time.TimeOnly))
+		}
+		log.Printf("WARN: auth: failed login from %s%s", addr, more)
+		f.logged, f.suppressed = now, 0
+	default:
+		f.suppressed++
+	}
 }
 
 // sameSecret compares in constant time; hashing first hides the length.

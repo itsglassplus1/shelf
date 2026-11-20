@@ -72,6 +72,13 @@ username = admin
 password = ...
 ```
 
+Spaces around the username and password are ignored. A wrong username or
+password is answered after a second and logged with the client's address
+(at most once a minute per address), e.g. for fail2ban.
+
+Shelf speaks plain HTTP, so the password and session cookie can be read on
+the way. Outside a trusted network, put a reverse proxy with TLS in front.
+
 `/healthz` needs no login. With `SHELF_AUTH=off` anyone who can reach the port
 can read the library; use it only when nothing else can reach it, e.g.
 Suwayomi in the same pod.

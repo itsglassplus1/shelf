@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"log"
 	"net/http"
@@ -85,6 +86,7 @@ func loginServer(t *testing.T, content string) (*authenticator, *httptest.Server
 	if err != nil {
 		t.Fatal(err)
 	}
+	a.failDelay = 0
 	srv := httptest.NewServer(newServer(cat, a))
 	t.Cleanup(srv.Close)
 	return a, srv
@@ -207,6 +209,52 @@ func TestLogin(t *testing.T) {
 	}
 	if resp := get(t, url, login{user: "admin", pass: pass}); resp.StatusCode != 200 {
 		t.Errorf("recreated login: %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestFailedLogins(t *testing.T) {
+	a, srv := loginServer(t, "username = reader\npassword = pass\n")
+	var logs bytes.Buffer
+	log.SetOutput(&logs) // after loginServer, which discards the log
+	url := srv.URL + "/api/v1/libraries"
+	count := func() int { return strings.Count(logs.String(), "failed login") }
+
+	// The extension's first request, without credentials, is not a failure.
+	get(t, url, login{})
+	if count() != 0 {
+		t.Errorf("request without credentials logged: %q", logs.String())
+	}
+
+	// Wrong passwords: answered after the delay; logged once per minute per address.
+	a.failDelay = 50 * time.Millisecond
+	start := time.Now()
+	get(t, url, login{user: "reader", pass: "nope"})
+	if d := time.Since(start); d < a.failDelay {
+		t.Errorf("wrong password answered after %v, want at least %v", d, a.failDelay)
+	}
+	a.failDelay = 0
+	get(t, url, login{user: "reader", pass: "nope"})
+	get(t, url, login{user: "pass", pass: "reader"})
+	if count() != 1 || !strings.Contains(logs.String(), "failed login from 127.0.0.1") {
+		t.Fatalf("log after 3 failures: %q; want one line with the address", logs.String())
+	}
+	if strings.Contains(logs.String(), "reader") {
+		t.Errorf("the username tried was logged: %q", logs.String())
+	}
+
+	// A minute later, the next failure is logged with the count in between.
+	a.failMu.Lock()
+	a.failures["127.0.0.1"].logged = time.Now().Add(-failedLoginLogEvery)
+	a.failMu.Unlock()
+	get(t, url, login{user: "reader", pass: "nope"})
+	if count() != 2 || !strings.Contains(logs.String(), "and 2 more since") {
+		t.Errorf("log after a minute: %q; want a second line counting 2 more", logs.String())
+	}
+
+	// A right password is neither delayed nor logged.
+	a.failDelay = time.Hour
+	if resp := get(t, url, login{user: "reader", pass: "pass"}); resp.StatusCode != 200 || count() != 2 {
+		t.Errorf("right password: %d, %d log lines", resp.StatusCode, count())
 	}
 }
 
