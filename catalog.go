@@ -329,6 +329,12 @@ func isDirEntryDir(parent string, e os.DirEntry) bool {
 	return false
 }
 
+// chapterExts are the archive extensions taken as chapters. The actual
+// format is detected from the file's content when it's opened.
+var chapterExts = map[string]bool{
+	".cbz": true, ".zip": true, ".cbr": true, ".rar": true, ".cbt": true, ".tar": true,
+}
+
 func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*Series, error) {
 	s := &Series{
 		ID: makeID("series", name), Name: name, Dir: dir, LibraryID: libID,
@@ -353,8 +359,7 @@ func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*S
 		switch {
 		case fi.IsDir():
 			s.Books = append(s.Books, &Book{Title: fname, Path: p, IsDir: true, Size: dirSize(p), Modified: fi.ModTime()})
-		case ext == ".cbz" || ext == ".zip" || ext == ".cbr" || ext == ".rar":
-			// The actual format is detected from the file's content when it's opened.
+		case chapterExts[ext]:
 			s.Books = append(s.Books, &Book{Title: strings.TrimSuffix(fname, path.Ext(fname)), Path: p, Size: fi.Size(), Modified: fi.ModTime()})
 		case imageTypes[ext] != "" && strings.EqualFold(strings.TrimSuffix(fname, path.Ext(fname)), "cover"):
 			s.Cover = p

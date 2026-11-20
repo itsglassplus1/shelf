@@ -167,6 +167,8 @@ func toBookDTO(ch chapter) bookDTO {
 		mediaType = "application/x-directory"
 	case ext == ".cbr" || ext == ".rar":
 		mediaType = "application/x-rar-compressed"
+	case ext == ".cbt" || ext == ".tar":
+		mediaType = "application/x-tar"
 	}
 	authors := []authorDTO{}
 	var releaseDate *string

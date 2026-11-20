@@ -26,13 +26,17 @@ var imageTypes = map[string]string{
 	".heic": "image/heif", ".heif": "image/heif",
 }
 
-// A page is either a plain file on disk (image folder or unpacked RAR: path
-// is set) or an entry inside a zip archive (path empty: zipIndex is used).
+// A page is a plain file on disk (image folder or unpacked RAR: path is
+// set), a file inside a tar archive (inTar: its data is at tarOffset), or an
+// entry inside a zip archive (otherwise: zipIndex is used).
 type pageEntry struct {
 	name      string // file name in the folder, or entry path in the archive
 	mediaType string
 	path      string
 	zipIndex  int
+	inTar     bool
+	tarOffset int64
+	tarSize   int64
 }
 
 type bookPages struct {
@@ -70,9 +74,12 @@ func (c *Catalog) pagesFor(b *Book) ([]pageEntry, error) {
 	} else {
 		var format string
 		if format, err = archiveFormat(b.Path); err == nil {
-			if format == "zip" {
+			switch format {
+			case "zip":
 				pages, err = c.listZipPages(b)
-			} else {
+			case "tar":
+				pages, err = listTarPages(b.Path)
+			default:
 				pages, err = c.rar.pages(b, fi)
 			}
 		}
@@ -96,6 +103,15 @@ func (c *Catalog) hasPageList(b *Book) bool {
 	c.pages.mu.Lock()
 	defer c.pages.mu.Unlock()
 	return c.pages.m[b.ID] != nil
+}
+
+// pageListCurrent reports whether b's cached page list was made from the
+// file as it is now (fi).
+func (c *Catalog) pageListCurrent(b *Book, fi os.FileInfo) bool {
+	c.pages.mu.Lock()
+	defer c.pages.mu.Unlock()
+	cached := c.pages.m[b.ID]
+	return cached != nil && cached.modTime.Equal(fi.ModTime()) && cached.size == fi.Size()
 }
 
 func (c *Catalog) forgetPages(b *Book) {
@@ -306,6 +322,29 @@ func (c *Catalog) openPage(b *Book, n int) (*openedPage, error) {
 				return nil, err
 			}
 			return &openedPage{ReadCloser: f, seeker: f, size: fi.Size(), mediaType: p.mediaType, modTime: fi.ModTime(), name: path.Base(p.name)}, nil
+		}
+
+		if p.inTar {
+			f, err := os.Open(b.Path)
+			if err != nil {
+				return nil, err
+			}
+			fi, err := f.Stat()
+			if err != nil {
+				f.Close()
+				return nil, err
+			}
+			if !c.pageListCurrent(b, fi) {
+				// The archive changed since its pages were listed; relist once.
+				f.Close()
+				c.forgetPages(b)
+				continue
+			}
+			sr := io.NewSectionReader(f, p.tarOffset, p.tarSize)
+			return &openedPage{
+				ReadCloser: multiCloser{Reader: sr, closers: []io.Closer{f}}, seeker: sr,
+				size: p.tarSize, mediaType: p.mediaType, modTime: fi.ModTime(), name: path.Base(p.name),
+			}, nil
 		}
 
 		r, release, err := c.zips.acquire(b)

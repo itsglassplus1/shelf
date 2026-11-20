@@ -24,9 +24,10 @@
 //
 // Every directory directly inside a category is a series; series folder names
 // must be unique across categories (IDs derive from them). Inside a series,
-// every .cbz/.zip/.cbr/.rar file and every sub-directory of images is a
-// chapter. Series, chapters and pages use natural order ("Chapter 2" <
-// "Chapter 10"). Metadata comes from ComicInfo.xml files (see comicinfo.go).
+// every .cbz/.zip/.cbr/.rar/.cbt/.tar file and every sub-directory of images
+// is a chapter. Series and pages use natural order ("Chapter 2" < "Chapter
+// 10"); chapter numbers are recognized like Mihon's (see chapternum.go).
+// Metadata comes from ComicInfo.xml files (see comicinfo.go).
 package main
 
 import (

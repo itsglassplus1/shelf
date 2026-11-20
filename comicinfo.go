@@ -208,8 +208,11 @@ func readBookComicInfoRaw(b *Book) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if format == "rar" {
+	switch format {
+	case "rar":
 		return readComicInfoRar(b.Path)
+	case "tar":
+		return readComicInfoTar(b.Path)
 	}
 	return readComicInfoZip(b.Path)
 }

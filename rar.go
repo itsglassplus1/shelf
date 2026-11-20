@@ -109,15 +109,15 @@ func (k *keyedMutex) lock(key string) (unlock func()) {
 	}
 }
 
-// archiveFormat identifies an archive by its first bytes, not its extension
-// (misnamed .cbr/.cbz files are common).
+// archiveFormat identifies an archive ("zip", "rar" or "tar") by its first
+// bytes, not its extension (misnamed .cbr/.cbz files are common).
 func archiveFormat(file string) (string, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	head := make([]byte, 7)
+	head := make([]byte, 512) // a tar header block
 	n, _ := io.ReadFull(f, head)
 	head = head[:n]
 	switch {
@@ -125,8 +125,13 @@ func archiveFormat(file string) (string, error) {
 		return "zip", nil
 	case strings.HasPrefix(string(head), "Rar!\x1a\x07"):
 		return "rar", nil
+	case isTarHeader(head):
+		return "tar", nil
 	}
-	return "", fmt.Errorf("%s: not a zip or rar archive", file)
+	if c := compressedFormat(head); c != "" {
+		return "", fmt.Errorf("%s: %s-compressed, not a zip, rar or plain tar archive (unpack a compressed .cbt to a plain tar)", file, c)
+	}
+	return "", fmt.Errorf("%s: not a zip, rar or tar archive", file)
 }
 
 // rarPage reports whether an archive entry is a page, and its normalized
