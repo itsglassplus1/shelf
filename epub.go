@@ -133,19 +133,37 @@ func (e *epubZip) packageDocument() (string, *epubPackage, error) {
 
 // resolveEpubPath resolves href (as written in a file at from) to a file
 // path in the archive: relative to from's folder, or to the root if it
-// starts with "/". Fragments and queries are dropped, %-escapes decoded.
-func resolveEpubPath(from, href string) string {
+// starts with "/". With asURL, href is read as a URL: fragments and queries
+// are dropped and %-escapes decoded; without, it is taken literally, as
+// Mihon does.
+func resolveEpubPath(from, href string, asURL bool) string {
 	href = strings.ReplaceAll(href, `\`, "/")
-	if i := strings.IndexAny(href, "#?"); i >= 0 {
-		href = href[:i]
-	}
-	if u, err := url.PathUnescape(href); err == nil {
-		href = u
+	if asURL {
+		if i := strings.IndexAny(href, "#?"); i >= 0 {
+			href = href[:i]
+		}
+		if u, err := url.PathUnescape(href); err == nil {
+			href = u
+		}
 	}
 	if !strings.HasPrefix(href, "/") {
 		href = path.Join("/"+path.Dir(from), href)
 	}
 	return strings.TrimPrefix(path.Clean(href), "/") // rooted: ".." stops at the root
+}
+
+// find returns the archive file href (in a file at from) refers to: read as
+// a URL, as the EPUB spec has it, else taken literally like Mihon does, so
+// every file Mihon finds is found too (e.g. one really named "a%20b.png").
+func (e *epubZip) find(from, href string) (string, bool) {
+	for _, asURL := range []bool{true, false} {
+		if name := resolveEpubPath(from, href, asURL); name != "" {
+			if _, ok := e.files[name]; ok {
+				return name, true
+			}
+		}
+	}
+	return "", false
 }
 
 // epubPages returns the page images of an EPUB in reading order.
@@ -167,18 +185,21 @@ func epubPages(zr *zip.Reader) ([]pageEntry, error) {
 		if !ok {
 			continue
 		}
-		pagePath := resolveEpubPath(ref, href)
-		data, err := e.read(pagePath)
-		if err != nil {
+		pagePath, ok := e.find(ref, href)
+		if !ok {
 			continue // a missing page: Mihon fails the chapter; skip it
 		}
+		data, err := e.read(pagePath)
+		if err != nil {
+			continue
+		}
 		for _, src := range imageRefs(data) {
-			name := resolveEpubPath(pagePath, src)
-			i, ok := e.files[name]
+			name, ok := e.find(pagePath, src)
 			mt := imageTypes[strings.ToLower(path.Ext(name))]
 			if !ok || mt == "" {
 				continue // not in the archive (e.g. a URL), or not an image the extension takes
 			}
+			i := e.files[name]
 			pages = append(pages, pageEntry{name: zr.File[i].Name, mediaType: mt, zipIndex: i})
 		}
 	}

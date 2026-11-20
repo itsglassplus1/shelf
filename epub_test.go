@@ -37,12 +37,13 @@ const testPage1 = `<?xml version="1.0" encoding="UTF-8"?>
 <img src="../images/z%20last.png#frag"/>
 <svg><image width="1" xlink:href="../images/a.jpg"/></svg>
 <img src="http://example.com/remote.png"/><img src="../images/gone.png"/>
+<img src="../images/odd%20name.png"/><img src="../images/odd#1.png"/>
 </body></html>`
 
 const testPage2 = `<html><body><p>&nbsp;text<br><IMG SRC="/OPS/images/b.png"></body></html>`
 
-// writeEpub creates an EPUB at p whose reading order (z last, a, b) differs
-// from name order (a, b, extra, z last).
+// writeEpub creates an EPUB at p whose reading order (z last, a, odd…, b)
+// differs from name order.
 func writeEpub(t *testing.T, p string) {
 	t.Helper()
 	writeZip(t, p,
@@ -54,6 +55,8 @@ func writeEpub(t *testing.T, p string) {
 		"OPS/images/z last.png", "IMG-Z",
 		"OPS/images/a.jpg", "IMG-A",
 		"OPS/images/b.png", "IMG-B",
+		"OPS/images/odd%20name.png", "IMG-PCT", // names Mihon finds taken literally
+		"OPS/images/odd#1.png", "IMG-HASH",
 		"OPS/images/extra.png", "EXTRA",
 	)
 }
@@ -82,7 +85,7 @@ func pageNames(t *testing.T, p string) []string {
 func TestEpubPages(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "ch.epub")
 	writeEpub(t, p)
-	want := []string{"OPS/images/z last.png", "OPS/images/a.jpg", "OPS/images/b.png"}
+	want := []string{"OPS/images/z last.png", "OPS/images/a.jpg", "OPS/images/odd%20name.png", "OPS/images/odd#1.png", "OPS/images/b.png"}
 	if got := pageNames(t, p); !slices.Equal(got, want) {
 		t.Errorf("pages %q, want %q", got, want)
 	}
@@ -97,7 +100,7 @@ func TestResolveEpubPath(t *testing.T) {
 		{"package.opf", "p.xhtml", "p.xhtml"},
 		{"OPS/p.xhtml", "../../../a.png", "a.png"},
 	} {
-		if got := resolveEpubPath(tc[0], tc[1]); got != tc[2] {
+		if got := resolveEpubPath(tc[0], tc[1], true); got != tc[2] {
 			t.Errorf("resolveEpubPath(%q, %q) = %q, want %q", tc[0], tc[1], got, tc[2])
 		}
 	}
@@ -162,7 +165,7 @@ func TestServerEpub(t *testing.T) {
 	if !slices.Contains(ch1.Metadata.Authors, authorDTO{"Pub", "translator"}) {
 		t.Errorf("Ch 1 scanlator: %v", ch1.Metadata.Authors)
 	}
-	for book, want := range map[string][]string{ch1.ID: {"IMG-Z", "IMG-A", "IMG-B"}, ch2.ID: {"ONE", "TWO", "TEN"}} {
+	for book, want := range map[string][]string{ch1.ID: {"IMG-Z", "IMG-A", "IMG-PCT", "IMG-HASH", "IMG-B"}, ch2.ID: {"ONE", "TWO", "TEN"}} {
 		for i, w := range want {
 			if code, got := fetch(t, "GET", fmt.Sprintf("%s/api/v1/books/%s/pages/%d", base, book, i+1), ""); code != 200 || got != w {
 				t.Errorf("book %s page %d: %d %q, want %q", book, i+1, code, got, w)
