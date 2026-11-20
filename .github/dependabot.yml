@@ -1,0 +1,22 @@
+# Weekly pull requests for the Go toolchain image, GitHub Actions and Go
+# modules. The publish workflow builds and tests pull requests without
+# publishing them, so an update that breaks the build shows there.
+version: 2
+updates:
+  - package-ecosystem: docker # the golang image in Containerfile
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly

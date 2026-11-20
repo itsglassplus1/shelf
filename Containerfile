@@ -4,7 +4,7 @@
 # The build stage always runs on the build machine's own architecture and
 # cross-compiles for the target (Go needs no emulation for that), so the
 # arm64 image builds as fast as the amd64 one.
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.24-alpine AS build
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
