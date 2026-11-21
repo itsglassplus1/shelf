@@ -27,16 +27,21 @@ const (
 	idleAfter       = 10 * time.Minute
 )
 
+// Library is a category; Name is its folder relative to SHELF_ROOT.
 type Library struct {
 	ID, Name, Path string
 }
 
+// Series is a folder directly inside a category. Its ID derives from the
+// folder name alone: moving it to another category keeps it, renaming the
+// folder makes a new series to clients.
 type Series struct {
 	ID, Name, Dir, LibraryID string
 	Cover                    string    // path to cover.<ext> in the series folder, or ""
 	DirMtime                 time.Time // series folder mtime when scanned
-	Created, Modified        time.Time
-	Books                    []*Book // natural filename order; Number = position (1-based)
+	Created                  time.Time // oldest chapter mtime (folder mtime without chapters)
+	Modified                 time.Time // newest of folder and chapter mtimes; what Latest sorts by
+	Books                    []*Book   // natural filename order; Number = position (1-based)
 
 	Meta       seriesMeta
 	MetaSrc    string    // file the metadata came from, or the copy path to watch ("" if none)
@@ -53,15 +58,20 @@ type seriesMeta struct {
 	Authors                           []authorDTO
 }
 
+// Book is a chapter: an archive or folder in a series folder. Its ID derives
+// from the series folder name and its own name, so renaming either makes a
+// new chapter to clients.
 type Book struct {
-	ID, Title, Path string
+	ID, Title, Path string // Title: the name without extension; ComicInfo may override it (see chapter)
 	IsDir           bool
-	Size            int64
+	Size            int64 // archive size, or the total size of a folder's images
 	Modified        time.Time
 	Number          int
 	Series          *Series
 }
 
+// index is the result of one complete scan. A rescan builds a new one and
+// swaps it in whole, so a request sees one consistent library throughout.
 type index struct {
 	libs       []*Library
 	series     []*Series
@@ -118,7 +128,8 @@ func makeID(parts ...string) string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(h.Sum(nil)[:10])
 }
 
-// noteRequest records activity. For browse requests it also makes sure the
+// noteRequest records activity. For browse requests (libraries, series lists
+// and details, chapter lists, filter values; not pages) it also makes sure the
 // library is being watched: if the background loop is stopped (startup, or
 // idle), it checks for changes before returning, so the answer is current,
 // and starts the loop.
@@ -353,6 +364,9 @@ var chapterExts = map[string]bool{
 	".cbz": true, ".zip": true, ".cbr": true, ".rar": true, ".cbt": true, ".tar": true, ".epub": true,
 }
 
+// scanSeries reads one series folder: sub-folders and chapterExts archives are
+// its chapters, the first cover.* its cover, and ComicInfo.xml its metadata
+// (see loadMeta). Anything else in the folder is ignored.
 func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*Series, error) {
 	s := &Series{
 		ID: makeID("series", name), Name: name, Dir: dir, LibraryID: libID,
@@ -405,9 +419,9 @@ func scanSeries(dir, name, libID string, mtime time.Time, seriesRoot string) (*S
 // loadMeta reads series metadata, in order of preference, from:
 //  1. ComicInfo.xml in the library's series folder;
 //  2. the copy in <data>/series/<name>/ComicInfo.xml;
-//  3. the latest chapter's ComicInfo.xml, which is then copied to (2); for
-//     an EPUB, the author and description from its package document (not
-//     copied).
+//  3. the latest (last in name order) chapter's ComicInfo.xml, which is
+//     then copied to (2); for an EPUB, the author and description from its
+//     package document (not copied).
 //
 // Unreadable files are logged and ignored.
 func (s *Series) loadMeta(seriesRoot string) {

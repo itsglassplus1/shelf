@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// Image types the Komga extension accepts without asking for conversion.
-// Other files inside a chapter are not listed as pages.
+// imageTypes are the image types served as pages and covers, by extension
+// or by content (see images.go). Other files in a chapter aren't pages.
 var imageTypes = map[string]string{
 	".jpg": "image/jpeg", ".jpeg": "image/jpeg",
 	".png":  "image/png",
@@ -57,6 +57,8 @@ const pageCacheMax = 5000
 
 var errNoPage = errors.New("page not found")
 
+// pagesFor returns b's pages in reading order, listing them again only when
+// the file or folder changed. A RAR chapter is unpacked on first use.
 func (c *Catalog) pagesFor(b *Book) ([]pageEntry, error) {
 	fi, err := os.Stat(b.Path)
 	if err != nil {

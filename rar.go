@@ -387,7 +387,7 @@ func (c *Catalog) firstPage(b *Book) (*openedPage, error) {
 		return c.openPage(b, 1)
 	}
 	if format, err := archiveFormat(b.Path); err != nil || format != "rar" {
-		return c.openPage(b, 1) // zip (or an error openPage will report)
+		return c.openPage(b, 1) // zip or tar (or an error openPage will report)
 	}
 	fi, err := os.Stat(b.Path)
 	if err != nil {

@@ -63,7 +63,8 @@ func (c *Catalog) logUnusedSeriesFolders() {
 }
 
 // writeAtomic writes r to dir/name via a temp file, so readers never see a
-// partial file.
+// partial file. The file is readable only by its owner (os.CreateTemp's
+// 0600), which the credentials file relies on.
 func writeAtomic(dir, name string, r io.Reader) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -139,7 +140,7 @@ func (c *Catalog) seriesCover(s *Series) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-// readSmallFile reads a file of at most 1 MB (ComicInfo.xml).
+// readSmallFile reads a file of at most 1 MB (ComicInfo.xml, credentials).
 func readSmallFile(p string) ([]byte, error) {
 	f, err := os.Open(p)
 	if err != nil {

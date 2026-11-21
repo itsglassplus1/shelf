@@ -231,6 +231,8 @@ func toBookDTO(ch chapter) bookDTO {
 	}
 }
 
+// humanSize formats a chapter's size for the extension's {size} placeholder,
+// which is in its default chapter name template.
 func humanSize(n int64) string {
 	const unit = 1024
 	if n < unit {
@@ -462,8 +464,9 @@ type operator struct {
 }
 
 // evalCondition evaluates the extension's condition tree against a series.
-// Conditions on data this server doesn't have (read status) are treated as
-// matching; there are no collections, so a collection condition never matches.
+// Conditions on data this server doesn't have (read status, deleted) are
+// treated as matching; there are no collections, so a collection condition
+// never matches.
 func evalCondition(raw json.RawMessage, s *Series) bool {
 	if len(raw) == 0 || string(raw) == "null" {
 		return true
@@ -536,6 +539,9 @@ func matchLeaf(key string, value json.RawMessage, s *Series) bool {
 	return false
 }
 
+// sortSeries sorts by the extension's "sort" parameter: metadata.titleSort
+// (or relevance, sent with a search; shelf doesn't rank matches, so also by
+// title), createdDate, lastModifiedDate (also what its Latest sends), random.
 func sortSeries(list []*Series, sortParam string) {
 	field, dir, _ := strings.Cut(sortParam, ",")
 	desc := dir == "desc"

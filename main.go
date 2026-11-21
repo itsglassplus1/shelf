@@ -1,6 +1,6 @@
 // Command shelf is a minimal, read-only comic/manga server that speaks the
 // subset of Komga's REST API used by the Mihon/Tachiyomi Komga extension, so
-// Suwayomi can read a local collection through that extension.
+// Mihon and Suwayomi can read a local collection through that extension.
 // See README.md for setup and behavior.
 //
 // Configuration (environment variables):

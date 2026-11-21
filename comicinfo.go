@@ -25,10 +25,11 @@ import (
 //
 // Series metadata comes from <series>/ComicInfo.xml in the library, else from
 // the copy in the data dir's series folder, else from the latest chapter's
-// ComicInfo.xml, which is then copied there (Suwayomi repeats the series info
-// in every chapter it downloads). Chapter metadata (title, number,
-// translator, date) comes from each chapter's own ComicInfo.xml, read when a
-// series' chapter list is requested and cached until the chapter changes.
+// ComicInfo.xml, which is then copied there (Mihon and Suwayomi write the
+// series info into every chapter they download). Chapter metadata (title,
+// number, translator, date) comes from each chapter's own ComicInfo.xml, read
+// when a series' chapter list is requested and cached until the chapter
+// changes.
 // In a solid RAR that means decoding the archive up to ComicInfo.xml (often
 // the last file), so a series of solid .cbr chapters is slow to list the
 // first time after a restart; other archives read just that one file.
@@ -60,6 +61,8 @@ type comicInfoXML struct {
 	Categories  string `xml:"Categories"` // <ty:Categories>: Mihon library categories
 }
 
+// comicInfo is what shelf uses of a ComicInfo.xml, or of an EPUB's package
+// document (see readEpubInfo).
 type comicInfo struct {
 	Title, Series, Number, Summary, Publisher string
 	Status                                    string // Komga status: ONGOING, ENDED, ABANDONED, HIATUS, or ""
@@ -172,6 +175,9 @@ func komgaStatus(s string) (status string, publishingFinished bool) {
 	return "", false
 }
 
+// releaseDate builds a YYYY-MM-DD date from ComicInfo's Year, Month and Day:
+// "" without a valid year; a missing or invalid month or day, or a day the
+// month doesn't have, falls back to the 1st.
 func releaseDate(y, m, d string) string {
 	year, err := strconv.Atoi(strings.TrimSpace(y))
 	if err != nil || year < 1 || year > 9999 {
