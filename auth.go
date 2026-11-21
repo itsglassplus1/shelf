@@ -38,7 +38,7 @@ import (
 // so fail2ban and the like can act on it. Requests without credentials are
 // part of the normal login and are not logged.
 //
-// Shelf speaks plain HTTP: the password and the session cookie can be read
+// shelf speaks plain HTTP: the password and the session cookie can be read
 // on the way. Outside a trusted network, put a reverse proxy with TLS in
 // front. Behind a proxy, the logged address is the proxy's.
 

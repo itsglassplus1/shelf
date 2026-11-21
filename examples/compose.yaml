@@ -12,7 +12,7 @@ services:
     container_name: shelf
     restart: unless-stopped
 
-    # Shelf speaks plain HTTP. Outside a trusted network, put a reverse proxy
+    # shelf speaks plain HTTP. Outside a trusted network, put a reverse proxy
     # with TLS in front and publish the port to it only ("127.0.0.1:25600:25600"),
     # or not at all if the proxy is in this file too.
     ports:
@@ -26,15 +26,15 @@ services:
     volumes:
       # The library, read only. On SELinux hosts (Fedora, RHEL) add z: ":ro,z".
       - /path/to/library:/library:ro
-      # Shelf's own files: login, unpacked RAR chapters, cover and
+      # shelf's own files: login, unpacked RAR chapters, cover and
       # ComicInfo.xml copies.
       - shelf-data:/data
 
-    # Shelf runs as uid and gid 1000, usually the host's first user. The
+    # shelf runs as uid and gid 1000, usually the host's first user. The
     # library must be readable by it. To run as someone else:
     # user: "1001:1001"
 
-    # Shelf only writes to /data and needs no privileges: the rest of the
+    # shelf only writes to /data and needs no privileges: the rest of the
     # container is read only, it has no capabilities, and can't gain any.
     read_only: true
     cap_drop: [ALL]
