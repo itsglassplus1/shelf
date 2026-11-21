@@ -29,6 +29,7 @@ newest release; `:1`, `:1.2` and `:1.2.3` follow a release line.
 | `SHELF_CACHE_MAX_MB` | `1024` | Size cap for unpacked RAR chapters. A RAR chapter larger than this can't be read. |
 | `SHELF_LISTEN` | `:25600` | Listen address. |
 | `SHELF_AUTH` | `on` | `off` serves without a login. Only when nothing else can reach shelf. |
+| `SHELF_PPROF` | (off) | Address for Go's profiling endpoints, e.g. `127.0.0.1:6060`. No login, separate from the API; for measuring performance only. |
 
 ## Login
 

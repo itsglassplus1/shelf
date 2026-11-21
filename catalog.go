@@ -77,7 +77,8 @@ type Catalog struct {
 	idx *index
 
 	refreshMu sync.Mutex
-	lastError string // last logged rescan error, to avoid repeating it
+	lastError string    // last logged rescan error, to avoid repeating it
+	lastScan  scanStats // the latest successful scan, for the log
 
 	lastRequest atomic.Int64 // UnixNano of the latest request
 	watchMu     sync.Mutex
@@ -90,6 +91,21 @@ type Catalog struct {
 	rar        *rarCache  // nil if the cache dir is unusable
 	seriesRoot string     // <data>/series, "" if unusable
 	covers     keyedMutex // one cover copy made per series at a time
+}
+
+// scanStats describes one successful scan: how long it took and how many
+// series were read from disk versus reused because their folder was unchanged.
+type scanStats struct {
+	took              time.Duration
+	rescanned, reused int
+}
+
+func (st scanStats) String() string {
+	took := st.took.Round(time.Millisecond)
+	if st.took < 100*time.Millisecond {
+		took = st.took.Round(10 * time.Microsecond)
+	}
+	return fmt.Sprintf("%d series scanned, %d unchanged, in %s", st.rescanned, st.reused, took)
 }
 
 func newCatalog(cfg config) *Catalog {
@@ -177,8 +193,10 @@ func (c *Catalog) checkForChanges() {
 			c.lastError = msg
 		}
 	} else if c.lastError != "" {
-		log.Printf("rescan: problem resolved, library updated")
+		log.Printf("rescan: problem resolved, library updated (%s)", c.lastScan)
 		c.lastError = ""
+	} else {
+		log.Printf("rescan: %s", c.lastScan)
 	}
 }
 
@@ -224,6 +242,8 @@ func (c *Catalog) refresh() error {
 // refreshLocked builds a complete new index and swaps it in only if it is
 // valid. Series whose folder is unchanged are reused without rescanning.
 func (c *Catalog) refreshLocked() error {
+	start := time.Now()
+	var st scanStats
 	var errs []error
 	old := c.current()
 	prev := map[string]*Series{}
@@ -291,9 +311,12 @@ func (c *Catalog) refreshLocked() error {
 			var s *Series
 			if p, ok := prev[sdir]; ok && p.DirMtime.Equal(sfi.ModTime()) && p.LibraryID == lib.ID && p.metaUnchanged() {
 				s = p // unchanged: reuse
+				st.reused++
 			} else if s, err = scanSeries(sdir, name, lib.ID, sfi.ModTime(), c.seriesRoot); err != nil {
 				errs = append(errs, err)
 				continue
+			} else {
+				st.rescanned++
 			}
 			if s.metaCopied {
 				copied++
@@ -317,6 +340,8 @@ func (c *Catalog) refreshLocked() error {
 	c.idx = idx
 	c.mu.Unlock()
 	c.pruneInfos(idx.booksByID)
+	st.took = time.Since(start)
+	c.lastScan = st
 	return nil
 }
 

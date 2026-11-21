@@ -15,6 +15,8 @@
 //	SHELF_CACHE_MAX_MB  soft size cap of cache/, in MB            (default 1024)
 //	SHELF_LISTEN        listen address                            (default :25600)
 //	SHELF_AUTH          "off" to serve without a login            (default on)
+//	SHELF_PPROF         address for Go profiling, no login        (default off)
+//	                    (see pprof.go)
 //
 // By default every request needs the username and password from
 // <data>/credentials, created with a random password on first start; edit
@@ -49,6 +51,7 @@ type config struct {
 	dataDir     string
 	categories  []string
 	listen      string
+	pprof       string // listen address for profiling; "" = off
 	cacheDir    string // <data>/cache
 	seriesDir   string // <data>/series
 	credentials string // <data>/credentials; "" = no login (SHELF_AUTH=off)
@@ -73,6 +76,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		root:        envOr("SHELF_ROOT", "/library"),
 		dataDir:     data,
 		listen:      envOr("SHELF_LISTEN", ":25600"),
+		pprof:       envOr("SHELF_PPROF", ""),
 		cacheDir:    filepath.Join(data, "cache"),
 		seriesDir:   filepath.Join(data, "series"),
 		credentials: filepath.Join(data, credentialsName),
@@ -127,12 +131,16 @@ func main() {
 	}
 	log.Printf("shelf: %d categories, %d series, %d chapters; listening on %s",
 		len(idx.libs), len(idx.series), books, cfg.listen)
+	log.Printf("shelf: initial scan: %s; %s", cat.lastScan, heapSummary())
 	if auth != nil {
 		log.Printf("shelf: login required (user %q, from %s)", auth.user, cfg.credentials)
 	} else {
 		log.Printf("WARN: shelf: SHELF_AUTH=off: anyone who can reach %s can read the library", cfg.listen)
 	}
 	cat.logUnusedSeriesFolders()
+	if cfg.pprof != "" {
+		go servePprof(cfg.pprof)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.listen,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -55,5 +56,27 @@ func touchLater(t *testing.T, p string) {
 	later := time.Now().Add(time.Hour)
 	if err := os.Chtimes(p, later, later); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A rescan reads only the series whose folder changed and reuses the rest;
+// the counts and the duration are logged.
+func TestRescanStats(t *testing.T) {
+	cat, _ := testLibrary(t)
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	n := len(cat.current().series)
+	if st := cat.lastScan; st.rescanned != n || st.reused != 0 || st.took <= 0 {
+		t.Errorf("initial scan %+v, want %d scanned, 0 unchanged", st, n)
+	}
+
+	touchLater(t, cat.current().series[0].Dir)
+	cat.checkForChanges()
+	if st := cat.lastScan; st.rescanned != 1 || st.reused != n-1 {
+		t.Errorf("rescan %+v, want 1 scanned, %d unchanged", st, n-1)
+	}
+	if want := fmt.Sprintf("rescan: 1 series scanned, %d unchanged, in ", n-1); !strings.Contains(logs.String(), want) {
+		t.Errorf("log %q, want %q", logs.String(), want)
 	}
 }
