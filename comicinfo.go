@@ -367,7 +367,7 @@ func (c *Catalog) chapters(s *Series) []chapter {
 		"chapters without a recognizable number (number -2, listed last by the extension):",
 		chapterNumbers(s.Meta.Title, out))
 	c.notes.report(s, "titles",
-		"chapters sharing a title were renamed so Suwayomi keeps them apart:",
+		"chapters sharing a title were renamed so Suwayomi and Mihon keep them apart:",
 		uniqueTitles(out))
 	return out
 }
@@ -464,10 +464,16 @@ func (l *seriesLog) report(s *Series, kind, header string, lines []string) {
 	log.Printf("series %q: %s\n%s", s.Name, header, msg)
 }
 
-// uniqueTitles makes chapter titles unique within a series. Suwayomi names a
-// chapter's page cache and download folder after the chapter name, so with a
-// name template like "{title}", chapters sharing a ComicInfo <Title> (e.g.
-// "Chapter") would share one folder and all show whichever was read first.
+// uniqueTitles makes chapter titles unique within a series. Clients name a
+// chapter's folders after its name and scanlator (the extension's translators),
+// so with a name template like "{title}", chapters sharing a ComicInfo <Title>
+// (e.g. "Chapter") would share one folder:
+//
+//   - Suwayomi names both the page cache and the download folder this way, so
+//     they would all show whichever was read first, downloaded or not.
+//   - Mihon caches pages by URL, but names download folders this way unless
+//     the chapter name hash setting is on (off by default on new installs),
+//     so downloading one would make the others look downloaded.
 //
 // Titles used by a single chapter are kept. Each chapter in a group sharing a
 // title falls back to its file/folder name without extension, then with it,
