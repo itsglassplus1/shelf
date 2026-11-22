@@ -29,8 +29,9 @@ const numberPattern = `([0-9]+)(\.[0-9]+)?(\.?[a-z]+)?`
 
 var (
 	// "Mokushiroku Alice Vol.1 Ch. 4: Misrepresentation" -> 4
-	// (Kotlin: (?<=ch\.) *NUMBER)
-	recBasic = regexp.MustCompile(`ch\. *` + numberPattern)
+	// (Kotlin: (?<=ch\.) *NUMBER). Unlike Mihon, also after "#":
+	// "Batman 2016 #001" -> 1
+	recBasic = regexp.MustCompile(`(?:ch\.|#) *` + numberPattern)
 	// "Bleach 567: Down With Snowwhite" -> 567
 	recNumber = regexp.MustCompile(numberPattern)
 	// "Onepunch-Man Punch Ver002 028" -> "Onepunch-Man Punch 028"
@@ -114,8 +115,12 @@ func chapterNumberToFloat(number string) float64 {
 // it wasn't, except -2 which sources use on purpose.
 func isKnownNumber(v float64) bool { return v == -2 || v > -1 }
 
+// cleanChapterName lowercases a chapter name and takes the series title out
+// of it. Unlike Mihon, underscores count as spaces, so "Berserk_v01_c003"
+// still has a volume and loses its title.
 func cleanChapterName(seriesTitle, chapterName string) string {
-	return strings.ReplaceAll(strings.ToLower(chapterName), strings.ToLower(seriesTitle), "")
+	clean := func(s string) string { return strings.ReplaceAll(strings.ToLower(s), "_", " ") }
+	return strings.ReplaceAll(clean(chapterName), clean(seriesTitle), "")
 }
 
 // numberedChapter is the input of parseChapterNumbers: a chapter's name and

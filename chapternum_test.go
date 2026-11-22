@@ -166,6 +166,21 @@ func TestChapterRecognitionBrackets(t *testing.T) {
 	}
 }
 
+func TestChapterRecognitionUnderscores(t *testing.T) {
+	assertNumbers(t, "Berserk", n("Berserk_v01_c003", "1", "3"))
+	assertNumbers(t, "Mob Psycho 100", n("Mob_Psycho_100_v01_c003", "1", "3"))
+	assertNumbers(t, "Mob_Psycho_100", n("Mob Psycho 100 v01 c003", "1", "3"))
+	assertNumbers(t, "Spider-Man 2099", n("Spider-Man_2099_001", "", "1"))
+}
+
+func TestChapterRecognitionHash(t *testing.T) {
+	assertNumbers(t, "Batman", n("Batman 2016 #001", "", "1"))
+	assertNumbers(t, "Batman", n("Batman 2016 # 12.5", "", "12.5"))
+	assertNumbers(t, "Batman", n("Batman #3", "", "3"))
+	// "ch." still wins when it comes first
+	assertNumbers(t, "", n("Ch.5 #2", "", "5"))
+}
+
 func TestChapterRecognitionWholeVolumes(t *testing.T) {
 	const title = "Marvel Masterworks - The Amazing Spider-Man"
 	// Numbered by volume, not by the year

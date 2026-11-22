@@ -141,8 +141,9 @@ Inside a series:
   else the file or folder name.
 - **Chapter numbers**: from ComicInfo `Number`, else recognized from the names
   as Mihon does (`Vol.2 Ch.12.5`, `#003`, extras). Unlike Mihon, numbers in
-  brackets like `(2009)` or `[Group 2]` are ignored, and a series made only of
-  volumes (`v01`, `v02`, …) is numbered by volume.
+  brackets like `(2009)` or `[Group 2]` are ignored, underscores count as
+  spaces, a number after `#` wins like one after `Ch.`, and a series made only
+  of volumes (`v01`, `v02`, …) is numbered by volume.
 - **Covers**: `cover.*` in the series folder, else page 1 of the first
   chapter, copied to `series/<series>/` in the data folder.
 
