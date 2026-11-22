@@ -52,6 +52,8 @@ var (
 	recBonus = regexp.MustCompile(`\b(?:extra|bonus|omake|special|side ?story|afterword|interlude)`)
 	// "Prologue: The Beginning" -> 0
 	recPrologue = regexp.MustCompile(`\b(?:prologue|one.?shot|pilot)\b`)
+	// "v01 (2009) (digital) (F3) [Group 2]" -> "v01"
+	recBracketed = regexp.MustCompile(`\([^()]*\)|\[[^\[\]]*\]|\{[^{}]*\}`)
 )
 
 var romanNumerals = []string{"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}
@@ -146,7 +148,7 @@ func recognizeChapterNumbers(seriesTitle string, chapters []numberedChapter, fil
 	for i, c := range chapters {
 		if isKnownNumber(c.number) {
 			numbers[i] = &recognizedNumber{value: c.number}
-		} else if n, ok := parseChapterName(removeRanges(names[i], shared[i])); ok {
+		} else if n, ok := parseChapterNameOutsideBrackets(removeRanges(names[i], shared[i])); ok {
 			numbers[i] = &n
 		}
 	}
@@ -159,6 +161,7 @@ func recognizeChapterNumbers(seriesTitle string, chapters []numberedChapter, fil
 			volumes[i] = &v
 		}
 	}
+	numberByVolume(numbers, volumes)
 
 	if fill {
 		fillChapterNumbers(names, numbers, volumes)
@@ -173,6 +176,46 @@ func recognizeChapterNumbers(seriesTitle string, chapters []numberedChapter, fil
 		}
 	}
 	return out
+}
+
+// numberByVolume numbers chapters by their volume when the list is made of
+// whole volumes: at least two chapters, none with a number, every one with a
+// volume and no two sharing one. "Series v01", "Series v02" -> 1, 2. Anything
+// else is left alone, since a volume number could then clash with a chapter
+// number, and a single name keeps Mihon's rule that a volume isn't the
+// chapter number.
+func numberByVolume(numbers []*recognizedNumber, volumes []*float64) {
+	if len(numbers) < 2 {
+		return
+	}
+	seen := map[float64]bool{}
+	for i := range numbers {
+		if numbers[i] != nil || volumes[i] == nil || seen[*volumes[i]] {
+			return
+		}
+		seen[*volumes[i]] = true
+	}
+	for i, v := range volumes {
+		numbers[i] = &recognizedNumber{value: *v}
+	}
+}
+
+// parseChapterNameOutsideBrackets is parseChapterName leaving out what is in
+// brackets, which holds years, scan and group tags rather than the chapter
+// number: "v10 (2008) (digital) (F3)" has none, not 2008. A bracket with a
+// part is kept, e.g. "Chapter 5 (Part 2)" -> 5b. Only a name with neither a
+// number nor a volume outside brackets is read whole, e.g. "Oneshot (12)".
+func parseChapterNameOutsideBrackets(name string) (recognizedNumber, bool) {
+	outside := recBracketed.ReplaceAllStringFunc(name, func(b string) string {
+		if recPart.MatchString(b) {
+			return b
+		}
+		return " "
+	})
+	if n, ok := parseChapterName(outside); ok || recVolume.MatchString(outside) {
+		return n, ok
+	}
+	return parseChapterName(name)
 }
 
 // span is a byte range [start, end) of a string.

@@ -145,6 +145,49 @@ func TestChapterRecognitionSingleNames(t *testing.T) {
 	}
 }
 
+func TestChapterRecognitionBrackets(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		n     nameNumbering
+	}{
+		// Years and tags in brackets aren't the chapter number
+		{"Spider-Man", n("Spider-Man 012 (2009) (digital) (F3) (TLK-EMPIRE-HD)", "", "12")},
+		{"Spider-Man", n("Spider-Man (2018) 012", "", "12")},
+		{"", n("[Group 2] Chapter 386", "", "386")},
+		{"", n("Vol.1 Ch.1: March 25 (First Day Cohabiting)", "1", "1")},
+		// A volume alone still isn't the chapter number
+		{"Spider-Man", n("Spider-Man v01 (2009) (digital)", "1", "")},
+		// A part in brackets is kept
+		{"", n("Chapter 5 (Part 2)", "", "5b")},
+		// Only brackets have a number
+		{"", n("Oneshot (12)", "", "12")},
+	} {
+		assertNumbers(t, tc.title, tc.n)
+	}
+}
+
+func TestChapterRecognitionWholeVolumes(t *testing.T) {
+	const title = "Marvel Masterworks - The Amazing Spider-Man"
+	// Numbered by volume, not by the year
+	assertNumbers(t, title,
+		n(title+" v11 (2009) (digital) (F) (TLK-EMPIRE-HD)", "11", "11"),
+		n(title+" v10 (2008) (digital) (F) (TLK-EMPIRE-HD)", "10", "10"),
+		n(title+" v02 (2009) (digital HD) (Kileko-Empire)", "2", "2"),
+		n(title+" v01 (2009) (digital) (F3) (TLK-EMPIRE-HD)", "1", "1"),
+	)
+	// Not when a chapter has a number, which a volume could clash with
+	assertNumbers(t, "",
+		n("Chapter 2", "", "2"),
+		n("Vol.2", "2", ""),
+		n("Vol.1", "1", ""),
+	)
+	// Not when volumes repeat
+	assertNumbers(t, "",
+		n("Vol.1 Extras", "1", ""),
+		n("Vol.1", "1", ""),
+	)
+}
+
 func TestChapterNumberToFloat(t *testing.T) {
 	for in, want := range map[string]float64{
 		"12": 12, "10.5": 10.5, "19a": 19.1, "19i": 19.9, "1.5a": 1.5, "-2": -2,
