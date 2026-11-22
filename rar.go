@@ -158,7 +158,7 @@ func rarCandidate(h *rardecode.FileHeader) (name string, ok bool) {
 // pages returns the page list of a RAR chapter, unpacking it on first use.
 func (rc *rarCache) pages(b *Book, fi os.FileInfo) ([]pageEntry, error) {
 	if rc == nil {
-		return nil, errors.New("RAR chapters need a writable cache dir (cache/ inside SHELF_DATA_DIR)")
+		return nil, errors.New("RAR chapters need a writable cache dir (cache/ inside /data)")
 	}
 	// The key includes mtime and size, so a changed archive is unpacked
 	// afresh, and the cache version, so a shelf that unpacks differently does too.

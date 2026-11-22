@@ -21,11 +21,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 
 	cfg, err = loadConfig(env(map[string]string{
-		"SHELF_CATEGORIES": "c", "SHELF_ROOT": "/lib", "SHELF_DATA_DIR": "/d",
-		"SHELF_LISTEN": "127.0.0.1:1", "SHELF_CACHE_MAX_MB": "5", "SHELF_AUTH": "OFF",
+		"SHELF_CATEGORIES": "c", "SHELF_LISTEN": "127.0.0.1:1", "SHELF_CACHE_MAX_MB": "5", "SHELF_AUTH": "OFF",
 	}))
-	if err != nil || cfg.root != "/lib" || cfg.cacheDir != "/d/cache" || cfg.listen != "127.0.0.1:1" ||
-		cfg.cacheMax != 5<<20 || cfg.credentials != "" {
+	if err != nil || cfg.listen != "127.0.0.1:1" || cfg.cacheMax != 5<<20 || cfg.credentials != "" {
 		t.Errorf("set: %+v, %v", cfg, err)
 	}
 

@@ -49,17 +49,15 @@ newest release; `:1`, `:1.2` and `:1.2.3` follow a release line.
 | Variable | Default | |
 |---|---|---|
 | `SHELF_CATEGORIES` | (required) | Category folders in the library, separated by `:`, e.g. `comics/marvel:manga`. Each is a library in the extension. |
-| `SHELF_ROOT` | `/library` | The library, mounted read only. |
-| `SHELF_DATA_DIR` | `/data` | shelf's own files: login, unpacked RAR chapters, cover and ComicInfo.xml copies. |
 | `SHELF_CACHE_MAX_MB` | `1024` | Size cap for unpacked RAR chapters. A RAR chapter larger than this can't be read. |
 | `SHELF_LISTEN` | `:25600` | Listen address. |
 | `SHELF_AUTH` | `on` | `off` serves without a login. Only switch when nothing else can reach shelf. |
 
 ## Login
 
-The login is in `credentials` in the data folder: user `admin` and a random
-password at first. Edit it to change them; changes apply within seconds.
-Delete it to get a new random password.
+The login is in `credentials` in the folder mounted at `/data`: user `admin`
+and a random password at first. Edit it to change them; changes apply within
+seconds. Delete it to get a new random password.
 
 Wrong passwords are answered after a second and logged with the client's
 address (e.g. for fail2ban). shelf speaks plain HTTP: outside a trusted

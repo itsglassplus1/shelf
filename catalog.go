@@ -27,7 +27,7 @@ const (
 	idleAfter       = 10 * time.Minute
 )
 
-// Library is a category; Name is its folder relative to SHELF_ROOT.
+// Library is a category; Name is its folder relative to the library root.
 type Library struct {
 	ID, Name, Path string
 }

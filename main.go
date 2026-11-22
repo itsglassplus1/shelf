@@ -5,19 +5,21 @@
 //
 // Configuration (environment variables):
 //
-//	SHELF_CATEGORIES    category folders relative to SHELF_ROOT,  (required)
+//	SHELF_CATEGORIES    category folders relative to /library,    (required)
 //	                    separated by ":", e.g. "comics/marvel:manga"
-//	SHELF_ROOT          library root, never written to            (default /library)
-//	SHELF_DATA_DIR      writable folder outside the library       (default /data)
-//	                      credentials             login (see auth.go)
-//	                      cache/                  RAR chapters unpacked on first read
-//	                      series/<series name>/   cover and ComicInfo.xml copies
 //	SHELF_CACHE_MAX_MB  soft size cap of cache/, in MB            (default 1024)
 //	SHELF_LISTEN        listen address                            (default :25600)
 //	SHELF_AUTH          "off" to serve without a login            (default on)
 //
+// The container mounts the library at /library (never written to) and a
+// writable folder at /data, which holds:
+//
+//	credentials             login (see auth.go)
+//	cache/                  RAR chapters unpacked on first read
+//	series/<series name>/   cover and ComicInfo.xml copies
+//
 // By default every request needs the username and password from
-// <data>/credentials, created with a random password on first start; edit
+// /data/credentials, created with a random password on first start; edit
 // the file to change them. /healthz stays open. With SHELF_AUTH=off anyone
 // who can reach the port can read the library: only for setups where
 // nothing else can reach it, such as Suwayomi in the same pod.
@@ -55,6 +57,12 @@ type config struct {
 	cacheMax    int64  // bytes
 }
 
+// Where the container mounts the library and shelf's own files.
+const (
+	libraryRoot = "/library"
+	dataDir     = "/data"
+)
+
 // maxCacheMB keeps the cache cap in bytes within an int64 (8 EiB).
 const maxCacheMB = math.MaxInt64 >> 20
 
@@ -68,14 +76,13 @@ func loadConfig(getenv func(string) string) (config, error) {
 		return def
 	}
 
-	data := envOr("SHELF_DATA_DIR", "/data")
 	cfg := config{
-		root:        envOr("SHELF_ROOT", "/library"),
-		dataDir:     data,
+		root:        libraryRoot,
+		dataDir:     dataDir,
 		listen:      envOr("SHELF_LISTEN", ":25600"),
-		cacheDir:    filepath.Join(data, "cache"),
-		seriesDir:   filepath.Join(data, "series"),
-		credentials: filepath.Join(data, credentialsName),
+		cacheDir:    filepath.Join(dataDir, "cache"),
+		seriesDir:   filepath.Join(dataDir, "series"),
+		credentials: filepath.Join(dataDir, credentialsName),
 	}
 	mb, err := strconv.ParseInt(envOr("SHELF_CACHE_MAX_MB", "1024"), 10, 64)
 	if err != nil || mb <= 0 || mb > maxCacheMB {
