@@ -49,7 +49,7 @@ newest release; `:1`, `:1.2` and `:1.2.3` follow a release line.
 | Variable | Default | |
 |---|---|---|
 | `SHELF_CATEGORIES` | (required) | Category folders in the library, separated by `:`, e.g. `comics/marvel:manga`. Each is a library in the extension. |
-| `SHELF_CACHE_MAX_MB` | `1024` | Size cap for unpacked RAR chapters. A RAR chapter larger than this can't be read. |
+| `SHELF_CACHE_MAX_MB` | `2048` | Size cap for unpacked RAR chapters. A RAR chapter larger than this can't be read. |
 | `SHELF_LISTEN` | `:25600` | Listen address. |
 | `SHELF_AUTH` | `on` | `off` serves without a login. Only switch when nothing else can reach shelf. |
 

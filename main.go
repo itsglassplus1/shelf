@@ -7,7 +7,7 @@
 //
 //	SHELF_CATEGORIES    category folders relative to /library,    (required)
 //	                    separated by ":", e.g. "comics/marvel:manga"
-//	SHELF_CACHE_MAX_MB  soft size cap of cache/, in MB            (default 1024)
+//	SHELF_CACHE_MAX_MB  soft size cap of cache/, in MB            (default 2048)
 //	SHELF_LISTEN        listen address                            (default :25600)
 //	SHELF_AUTH          "off" to serve without a login            (default on)
 //
@@ -84,7 +84,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		seriesDir:   filepath.Join(dataDir, "series"),
 		credentials: filepath.Join(dataDir, credentialsName),
 	}
-	mb, err := strconv.ParseInt(envOr("SHELF_CACHE_MAX_MB", "1024"), 10, 64)
+	mb, err := strconv.ParseInt(envOr("SHELF_CACHE_MAX_MB", "2048"), 10, 64)
 	if err != nil || mb <= 0 || mb > maxCacheMB {
 		return config{}, fmt.Errorf("SHELF_CACHE_MAX_MB must be a number of MB from 1 to %d, got %q", maxCacheMB, getenv("SHELF_CACHE_MAX_MB"))
 	}

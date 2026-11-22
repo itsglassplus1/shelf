@@ -15,7 +15,7 @@ func TestLoadConfig(t *testing.T) {
 	if strings.Join(cfg.categories, "|") != "comics/marvel|manga" {
 		t.Errorf("categories %q", cfg.categories)
 	}
-	if cfg.root != "/library" || cfg.dataDir != "/data" || cfg.listen != ":25600" || cfg.cacheMax != 1024<<20 ||
+	if cfg.root != "/library" || cfg.dataDir != "/data" || cfg.listen != ":25600" || cfg.cacheMax != 2048<<20 ||
 		cfg.credentials != "/data/credentials" || cfg.cacheDir != "/data/cache" || cfg.seriesDir != "/data/series" {
 		t.Errorf("defaults: %+v", cfg)
 	}
