@@ -8,6 +8,8 @@ import (
 
 // Ported from Mihon's ChapterRecognitionTest
 // (domain/src/test/java/tachiyomi/domain/chapter/service/ChapterRecognitionTest.kt).
+// Copyright 2015 Javier Tomás, 2024 Mihon Open Source Project; Apache
+// License 2.0. Translated to Go and changed for shelf (see NOTICE).
 
 type nameNumbering struct {
 	name string

@@ -154,3 +154,9 @@ it made again.
 - Collections, read lists, book search.
 - 7z/cb7 archives, compressed tars.
 - Editing metadata or uploading through the extension.
+
+## License
+
+shelf is licensed under the [Apache License 2.0](LICENSE). Its chapter number
+recognition is ported from [Mihon](https://github.com/mihonapp/mihon); see
+[NOTICE](NOTICE) for that and for the libraries built into the binary.

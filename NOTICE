@@ -1,0 +1,28 @@
+shelf
+Copyright 2026 itsglassplus1
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software from Mihon
+(https://github.com/mihonapp/mihon), licensed under the Apache License,
+Version 2.0:
+  Copyright 2015 Javier Tomás
+  Copyright 2024 Mihon Open Source Project
+
+  chapternum.go and chapternum_test.go are a Go translation, with changes,
+  of ChapterRecognition.kt and ChapterRecognitionTest.kt.
+
+Binaries and container images of shelf also include:
+
+  rardecode (https://github.com/nwaples/rardecode)
+    Copyright (c) 2015, Nicholas Waples
+    BSD 2-Clause License
+
+  The Go standard library and runtime (https://go.dev)
+    Copyright 2009 The Go Authors
+    BSD 3-Clause License
+
+Container images carry the full text of these licenses in /licenses.
+
+shelf implements part of Komga's REST API (https://github.com/gotson/komga)
+so the Komga extension can talk to it; it contains no Komga code.

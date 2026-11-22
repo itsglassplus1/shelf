@@ -11,6 +11,8 @@ import (
 // Chapter number recognition, ported from Mihon's ChapterRecognition
 // (domain/src/main/java/tachiyomi/domain/chapter/service/ChapterRecognition.kt)
 // so chapters get the numbers Mihon's local source would give them.
+// Copyright 2015 Javier Tomás, 2024 Mihon Open Source Project; Apache
+// License 2.0. Translated to Go and changed for shelf (see NOTICE).
 //
 // Each name is read on its own: the volume or season is taken out, a part
 // becomes the letter of a sub-chapter, and the chapter number is the number

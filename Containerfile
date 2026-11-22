@@ -17,6 +17,10 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # The data folder, owned by the user shelf runs as. A new volume mounted
 # there takes this owner.
 RUN mkdir -p /rootfs/data
+# shelf's license and those of the code built into the binary (see NOTICE).
+COPY LICENSE NOTICE /licenses/
+RUN cp "$(go env GOROOT)/LICENSE" /licenses/go.txt && \
+    cp "$(go list -m -f '{{.Dir}}' github.com/nwaples/rardecode/v2)/LICENSE" /licenses/rardecode.txt
 
 # Final image: just the static binary, run as an unprivileged user
 # (1000, usually the host's first user, so bind-mounted files are theirs;
@@ -24,6 +28,7 @@ RUN mkdir -p /rootfs/data
 FROM scratch
 COPY --from=build /shelf /shelf
 COPY --from=build --chown=1000:1000 /rootfs/ /
+COPY --from=build /licenses/ /licenses/
 USER 1000:1000
 EXPOSE 25600
 ENTRYPOINT ["/shelf"]
